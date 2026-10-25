@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.egg-info/
+build/
+dist/
+
+# makepkg output when test-building packaging/aur/PKGBUILD
+packaging/aur/src/
+packaging/aur/pkg/
+packaging/aur/*.tar.*
+packaging/aur/.SRCINFO

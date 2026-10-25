@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "niri-live-wallpaper"
+version = "0.1.0"  # keep in sync with niri_live_wallpaper/__init__.py
+description = "Video wallpapers for the niri compositor, made to work with DankMaterialShell"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">= 3.10"
+authors = [{ name = "Michał Toczek" }]
+dependencies = []  # standard library only; external programs are listed in README.md
+
+[project.urls]
+Homepage = "https://github.com/toczekmj/niri-live-wallpaper"
+Changelog = "https://github.com/toczekmj/niri-live-wallpaper/blob/main/CHANGELOG.md"
+
+[project.scripts]
+nlw = "niri_live_wallpaper.__main__:main"
+
+[tool.setuptools]
+packages = ["niri_live_wallpaper", "niri_live_wallpaper.tui"]

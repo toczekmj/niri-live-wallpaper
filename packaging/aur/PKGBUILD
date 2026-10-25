@@ -1,0 +1,47 @@
+# Maintainer: Michał Toczek <13023170+toczekmj at users dot noreply dot github dot com>
+#
+# AUR recipe for Niri Live Wallpaper. Release checklist: packaging/aur/README.md.
+
+pkgname=niri-live-wallpaper
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Video wallpapers for the niri compositor (TUI + mpvpaper), with DankMaterialShell integration"
+arch=('any')
+url="https://github.com/toczekmj/niri-live-wallpaper"
+license=('MIT')
+depends=(
+  'python'
+  'niri'
+  'mpvpaper'  # AUR: plays the video on the wallpaper layer
+  'ffmpeg'    # video info, per-screen copies, theme frames
+  'fzf'       # the import picker
+)
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+optdepends=(
+  'fd: faster file search in the import picker'
+  'wl-clipboard: copy the niri config lines with the c key'
+  'glib2: open the video folder in your file manager (gdbus)'
+  'xdg-utils: fallback for opening the video folder'
+  'dms-shell: DankMaterialShell colour and lock-screen sync'
+  'intel-media-driver: hardware video decoding and encoding on Intel GPUs'
+  'nvidia-vaapi-driver: hardware video decoding on NVIDIA GPUs'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # replace with the real checksum: run `updpkgsums` after tagging the release
+
+build() {
+  cd "$pkgname-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  python -m unittest -v
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 README.md CHANGELOG.md -t "$pkgdir/usr/share/doc/$pkgname/"
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+}
