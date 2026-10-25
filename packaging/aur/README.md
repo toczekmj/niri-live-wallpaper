@@ -7,6 +7,12 @@ builds the `mpvpaper` dependency from the AUR.
 
 The name `niri-live-wallpaper` was free on 2026-10-25.
 
+> **Status (2026-10-25): not published yet. AUR account registration is closed.** Arch froze new
+> registrations during the June 2026 malware incident ("Active AUR malicious packages incident", archlinux.org
+> news, 2026-06-12). They reopened briefly in July and were closed again in August. Watch
+> <https://archlinux.org/news/> and the aur-general mailing list for the reopening. Until then, Arch users can
+> build this recipe from the repository (`makepkg -si` here, after `yay -S mpvpaper`); see the main README.
+
 ## One-time setup
 
 ### 1. Decide the open questions in `PKGBUILD`

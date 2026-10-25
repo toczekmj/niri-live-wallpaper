@@ -141,17 +141,35 @@ sets that path to a frame of the video. It also removes DMS's blurred overview w
 shows there instead. The app reads `~/.config/DankMaterialShell/settings.json` for this
 (`screenPreferences.wallpaper` is `[]` when the toggle is on).
 
-### 4. Run it
+### 4. Install and run
+
+**Arch Linux, as a pacman package.** AUR registration is currently closed after the 2026 malware incidents, so
+the package isn't on the AUR yet. The same recipe builds from this repository. `mpvpaper` comes from the AUR, so
+install it with your AUR helper first:
 
 ```sh
-./nlw.py                 # straight from the checkout, nothing to install
-# optional, to run it as `nlw` from anywhere:
-ln -s "$PWD/nlw.py" ~/.local/bin/nlw
-# or install it as a package (creates the `nlw` command):
-pipx install .           # or: pip install --user .
+yay -S mpvpaper
+git clone https://github.com/toczekmj/niri-live-wallpaper
+cd niri-live-wallpaper/packaging/aur
+makepkg -si              # builds the latest release, runs the tests, installs it
 ```
 
-`nlw --version` prints the version, and `nlw --help` lists the commands.
+**Any distro, with pipx** (install the external programs from the dependency table yourself):
+
+```sh
+pipx install git+https://github.com/toczekmj/niri-live-wallpaper@v0.1.0
+```
+
+**Straight from a clone, nothing installed:**
+
+```sh
+git clone https://github.com/toczekmj/niri-live-wallpaper
+cd niri-live-wallpaper && ./nlw.py
+# optional, to run it as `nlw` from anywhere:
+ln -s "$PWD/nlw.py" ~/.local/bin/nlw
+```
+
+Then run `nlw`. `nlw --version` prints the version, and `nlw --help` lists the commands.
 
 Import a video (`i`), select it with `space`, and answer the "start at login?" question.
 
