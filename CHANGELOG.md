@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `install.sh`, a one-line installer: `bash -c "$(curl -fsSL …/install.sh)"`. On Arch-based distros it
+  installs a pacman package (mpvpaper from the AUR); elsewhere it installs the app into its own Python
+  environment and lists any missing programs. Supports `--dry-run`, `--yes` and `--uninstall`.
+
+### Changed
+
+- README: quick install at the top, a table of contents, and an up-to-date picture of the app.
+
 ## [0.1.0] - 2026-10-25
 
 First public release.

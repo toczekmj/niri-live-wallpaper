@@ -3,25 +3,67 @@
 A terminal app for using **videos as your desktop wallpaper** on the [niri](https://github.com/niri-wm/niri)
 compositor, made to work alongside [DankMaterialShell (DMS)](https://github.com/AvengeMedia/DankMaterialShell).
 
+## Quick install
+
+Paste this into a terminal:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/toczekmj/niri-live-wallpaper/main/install.sh)"
+```
+
+It shows what it's going to do and asks before changing anything:
+- **Arch-based distros** (Arch, EndeavourOS, CachyOS, Manjaro, …): installs a regular pacman package, including
+  `mpvpaper` from the AUR.
+- **Other distros:** installs the app in its own folder in your home (no sudo), then lists any programs you
+  still need, with the command to install them.
+
+Then start it with `nlw`. The setup checks at the top of the app tell you if anything else is needed.
+Add `-- --dry-run` to the end of that line to see the steps without running them, or `-- --uninstall` to remove
+the app. Prefer to read it first? It's [install.sh](install.sh).
+
 Many video-wallpaper apps (e.g. Hidamari) open a normal fullscreen window. A tiling compositor like niri tiles
 it like any other window, so it covers your apps. Here the video is drawn by
 [mpvpaper](https://github.com/GhostNaN/mpvpaper) on a real Wayland **background layer surface**
 (`wlr-layer-shell`), behind all windows, the same way swaybg or DMS's own wallpaper work.
 
+## Contents
+
+- [Features](#features)
+- [Will it work on my niri?](#will-it-work-on-my-niri)
+- [Dependencies](#dependencies)
+- [Setup before the first run](#setup-before-the-first-run)
+  - [1. Start niri as a session](#1-start-niri-as-a-session)
+  - [2. niri: a wallpaper that stays still (optional, recommended)](#2-niri-a-wallpaper-that-stays-still-optional-recommended)
+  - [3. Only one wallpaper program](#3-only-one-wallpaper-program)
+  - [4. Install and run](#4-install-and-run)
+- [Usage](#usage)
+  - [Per-video, per-screen settings (e)](#per-video-per-screen-settings-e)
+- [How it works](#how-it-works)
+- [Where everything is stored](#where-everything-is-stored)
+  - [config.json format](#configjson-format)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Uninstall](#uninstall)
+- [License](#license)
+
+## Features
+
 ```
  Niri Live Wallpaper
- ──────────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────────────
  Setup
- ✓ niri: layer-rule found in ~/.config/niri
+ ✓ niri: video stays still behind workspaces (layer-rule + transparent background)
 layer-rule { match namespace="^mpvpaper$"; place-within-backdrop true; }
- ✓ DMS: built-in wallpaper disabled
- ──────────────────────────────────────────────────────────────────────────
+layout { background-color "transparent"; }
+ ✓ no other wallpaper program is drawing
+ ✓ session: systemd and niri session ready for the background service
+ ─────────────────────────────────────────────────────────────────────────────────
  Videos  (~/.local/share/niri-live-wallpaper/videos)
   ● ocean.mp4      3840×2160 · 60 fps → 30 fps · per-screen
   ○ forest.webm    1920×1080 · 24 fps
 
  Actions
-  › Import a video (fuzzy finder)
+  › Import videos (fuzzy finder, Tab marks several)
   › Open video folder in file manager
   › Stop live wallpaper
   › Cycle wallpapers: [every 1h 30m]
@@ -29,11 +71,10 @@ layer-rule { match namespace="^mpvpaper$"; place-within-backdrop true; }
   › Ask to lower frame rate on import (>30 fps): [on]
   › Ask for per-screen frame rate & resolution on import: [off]
   › Quit
- ──────────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────────────
  wallpaper: playing   autostart: on   cycle: every 1h 30m, next in 52m
 ```
 
-## Features
 
 - **Video library:** import videos with a fuzzy finder (`fzf`), one or many at once, or drop files into the app's folder. Pick one
   with `space` and it becomes your wallpaper.
@@ -143,9 +184,16 @@ shows there instead. The app reads `~/.config/DankMaterialShell/settings.json` f
 
 ### 4. Install and run
 
-**Arch Linux, as a pacman package.** AUR registration is currently closed after the 2026 malware incidents, so
-the package isn't on the AUR yet. The same recipe builds from this repository. `mpvpaper` comes from the AUR, so
-install it with your AUR helper first:
+The [quick install](#quick-install) line does everything:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/toczekmj/niri-live-wallpaper/main/install.sh)"
+```
+
+Running it again later updates the app to the latest release. If you'd rather do it by hand:
+
+**Arch Linux, as a pacman package** (the AUR package will follow once AUR registration reopens; it was closed
+after the 2026 malware incidents):
 
 ```sh
 yay -S mpvpaper
@@ -154,7 +202,7 @@ cd niri-live-wallpaper/packaging/aur
 makepkg -si              # builds the latest release, runs the tests, installs it
 ```
 
-**Any distro, with pipx** (install the external programs from the dependency table yourself):
+**Any distro, with pipx** (install the programs from the dependency table yourself):
 
 ```sh
 pipx install git+https://github.com/toczekmj/niri-live-wallpaper@v0.1.0
@@ -330,6 +378,7 @@ version.
 
 ```
 nlw.py                       launcher: run from the checkout without installing
+install.sh                   the one-line installer (Arch package or Python environment)
 pyproject.toml               metadata, Python version, the `nlw` entry point
 niri_live_wallpaper/
   __main__.py                command line (`nlw`, `nlw run`) and logging setup
@@ -368,10 +417,15 @@ test. When releasing, bump the version in `niri_live_wallpaper/__init__.py` and 
 ## Uninstall
 
 ```sh
-systemctl --user disable --now niri-live-wallpaper.service
-rm ~/.config/systemd/user/niri-live-wallpaper.service && systemctl --user daemon-reload
-rm -r ~/.config/niri-live-wallpaper ~/.cache/niri-live-wallpaper ~/.local/state/niri-live-wallpaper
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/toczekmj/niri-live-wallpaper/main/install.sh)" -- --uninstall
+```
+
+This stops the wallpaper, removes its service and the app (the pacman package or the app folder), and keeps your
+videos, settings and cache. To remove those too:
+
+```sh
 rm -r ~/.local/share/niri-live-wallpaper     # your imported videos!
+rm -r ~/.config/niri-live-wallpaper ~/.cache/niri-live-wallpaper ~/.local/state/niri-live-wallpaper
 ```
 
 Then remove the two lines from your niri config (keep `background-color "transparent"` if DMS put it there)
