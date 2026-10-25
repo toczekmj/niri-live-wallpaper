@@ -27,7 +27,7 @@ optdepends=(
   'nvidia-vaapi-driver: hardware video decoding on NVIDIA GPUs'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')  # replace with the real checksum: run `updpkgsums` after tagging the release
+sha256sums=('c412f027abeee71d2bdb7193749b4906dc0e14880f7175919621631e0e940051')
 
 build() {
   cd "$pkgname-$pkgver"
