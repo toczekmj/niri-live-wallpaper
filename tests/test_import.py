@@ -21,12 +21,12 @@ class ImportSummaryTest(unittest.TestCase):
 
     def test_several(self):
         self.assertEqual(import_summary(["a", "b", "c"], ["d"], ["e (Permission denied)"]),
-                         "Imported 3 videos. Press space to set one as your wallpaper "
+                         "Imported 3 wallpapers. Press space to set one as your wallpaper "
                          "(1 already imported; failed: e (Permission denied))")
 
     def test_already_imported(self):
         self.assertEqual(import_summary([], ["a.mp4"], []), "a.mp4 is already imported")
-        self.assertEqual(import_summary([], ["a", "b"], []), "All 2 videos are already imported")
+        self.assertEqual(import_summary([], ["a", "b"], []), "All 2 wallpapers are already imported")
 
     def test_only_failures(self):
         self.assertEqual(import_summary([], [], ["a (No space left on device)"]),

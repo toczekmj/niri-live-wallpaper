@@ -27,9 +27,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from . import paths
+from . import fit, paths
 
 log = logging.getLogger(__name__)
 
@@ -59,8 +60,11 @@ def migrate(cfg: Config) -> Config:
     version = cfg.get("version", 1)
     if not isinstance(version, int) or version > CURRENT_VERSION:
         # Written by a newer version of the app: use what we understand, don't rewrite it.
-        log.warning("config version %r is newer than this app understands (%d)",
-                    version, CURRENT_VERSION)
+        log.warning(
+            "config version %r is newer than this app understands (%d)",
+            version,
+            CURRENT_VERSION,
+        )
         return cfg
     while version < CURRENT_VERSION:
         cfg = MIGRATIONS[version](cfg)
@@ -97,6 +101,7 @@ def update(**changes: Any) -> Config:
 
 # --------------------------------------------------------------------------- simple settings
 
+
 def ask_fps(cfg: Config) -> bool:
     return cfg.get("ask_fps", True)
 
@@ -107,15 +112,41 @@ def ask_screens(cfg: Config) -> bool:
 
 # --------------------------------------------------------------------------- per-video settings
 
+
 def video_entry(cfg: Config, name: str) -> dict[str, Any] | None:
     """Settings of one video, or None if the user was never asked about it:
 
-        {"fps": int | None,       all screens: frame-rate cap, None = original
-         "scale": int,            all screens: % of native resolution, missing = 100
-         "screens": {output name: {"fps": ..., "scale": ...}}}
-                                  per-screen overrides; a missing key = same as all screens
+    {"fps": int | None,       all screens: frame-rate cap, None = original
+     "scale": int,            all screens: % of native resolution, missing = 100
+     "screens": {output name: {"fps": ..., "scale": ...}}}
+                              per-screen overrides; a missing key = same as all screens
+
+    How it fits a screen of another shape is "fit" (fit.MODES key) and "align" (fit.ALIGNS key, the
+    part kept when cropping), both for all screens and in the per-screen overrides; missing = "fill",
+    "center". An override's "fit" and "align" belong together: "fit" there is always stored, even
+    when it is "fill", so it can undo a different fit set for all screens.
     """
     return cfg.get("videos", {}).get(name)
+
+
+def set_fit(target: dict[str, Any], mode: str, align: str, keep_default: bool = False) -> None:
+    """Store a fit choice in an entry (or a per-screen override, with keep_default=True), leaving
+    out the defaults so the file only lists real choices."""
+    target.pop("fit", None)
+    target.pop("align", None)
+    if mode != fit.DEFAULT_FIT or keep_default:
+        target["fit"] = mode
+    if mode == "fill" and align != fit.DEFAULT_ALIGN:
+        target["align"] = align
+
+
+def screen_fit(cfg: Config, name: str, output: str) -> tuple[str, str]:
+    """Effective (fit mode, crop focus) of a file on one output; the defaults for unknown values."""
+    entry = video_entry(cfg, name) or {}
+    override = entry.get("screens", {}).get(output, {})
+    source = override if "fit" in override else entry
+    mode, align = source.get("fit", fit.DEFAULT_FIT), source.get("align", fit.DEFAULT_ALIGN)
+    return (mode, align) if fit.valid(mode, align) else (fit.DEFAULT_FIT, fit.DEFAULT_ALIGN)
 
 
 def save_video_entry(name: str, entry: dict[str, Any]) -> Config:

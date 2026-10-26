@@ -11,9 +11,20 @@ All notable changes to this project are documented here. The format follows
 - `install.sh`, a one-line installer: `bash -c "$(curl -fsSL …/install.sh)"`. On Arch-based distros it
   installs a pacman package (mpvpaper from the AUR); elsewhere it installs the app into its own Python
   environment and lists any missing programs. Supports `--dry-run`, `--yes` and `--uninstall`.
+- Still images (png, jpg, webp, bmp, avif, jxl) can be imported and used as wallpapers next to videos. They
+  are shown as they are, take part in cycling, and are handed to DMS directly for theming.
+- Choose how a video or image fits a screen of a different shape: fill and crop, black bars, blurred bars,
+  stretch or original size. When cropping, pick which edge to keep. The choice is made per screen in the settings
+  editor (`e`), which gets a Fit column; importing an image that doesn't match a screen asks right away. Copies
+  made for a screen follow the fit, and their file names record it.
 
 ### Changed
 
+- The settings editor and the "ask on import" option now cover fit as well as frame rate and resolution.
+- The settings editor shows every change live on the wallpaper, and the fit menus preview each option as you
+  move the highlight, including during an import (your current wallpaper comes back afterwards) and
+  when you pick a wallpaper. Esc keeps the settings, `c` or `q` cancels and restores the previous ones. (Before,
+  changes were only applied after closing it.)
 - README: quick install at the top, a table of contents, and an up-to-date picture of the app.
 
 ## [0.1.0] - 2026-10-25

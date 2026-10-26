@@ -10,14 +10,29 @@ import json
 import logging
 import os
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable
 
 from . import paths, proc
 
 log = logging.getLogger(__name__)
+
+IMAGE_EXTENSIONS = (
+    "png",
+    "jpg",
+    "jpeg",
+    "webp",
+    "bmp",
+    "avif",
+    "jxl",
+)  # not gif: that plays as a video
+
+
+def is_image(path: Path) -> bool:
+    """A still image (shown as is, never re-encoded). Decided by extension."""
+    return path.suffix.lower().lstrip(".") in IMAGE_EXTENSIONS
 
 
 @dataclass(frozen=True)
@@ -25,8 +40,9 @@ class VideoInfo:
     width: int
     height: int
     fps: float
-    duration: float   # seconds, 0 if unknown
+    duration: float  # seconds, 0 if unknown
     has_audio: bool
+    is_image: bool = False
 
 
 def parse_rate(rate: str) -> float:
@@ -49,11 +65,20 @@ def probe(path: Path) -> VideoInfo | None:
 
 
 @lru_cache(maxsize=256)
-def _probe(path: str, mtime: float) -> VideoInfo | None:  # mtime is only part of the cache key
+def _probe(
+    path: str, mtime: float
+) -> VideoInfo | None:  # mtime is only part of the cache key
     result = proc.run(
-        ["ffprobe", "-v", "error", "-show_entries",
-         "stream=codec_type,width,height,avg_frame_rate,r_frame_rate:format=duration",
-         "-of", "json", path],
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type,width,height,avg_frame_rate,r_frame_rate:format=duration",
+            "-of",
+            "json",
+            path,
+        ],
         timeout=15,
     )
     if not proc.succeeded(result):
@@ -65,9 +90,11 @@ def _probe(path: str, mtime: float) -> VideoInfo | None:  # mtime is only part o
         return VideoInfo(
             width=int(video["width"]),
             height=int(video["height"]),
-            fps=parse_rate(video.get("avg_frame_rate", "")) or parse_rate(video.get("r_frame_rate", "")),
+            fps=parse_rate(video.get("avg_frame_rate", ""))
+            or parse_rate(video.get("r_frame_rate", "")),
             duration=float(data.get("format", {}).get("duration") or 0),
             has_audio=any(s.get("codec_type") == "audio" for s in streams),
+            is_image=is_image(Path(path)),
         )
     except (ValueError, KeyError, TypeError, StopIteration) as e:
         log.warning("unexpected ffprobe output for %s: %s", path, e)
@@ -82,11 +109,42 @@ def extract_frame(video: Path) -> Path | None:
         return frame
     # Seek 1s in to skip black intro frames; fall back to the first frame for very short clips.
     for seek in ("1", "0"):
-        result = proc.run(["ffmpeg", "-y", "-v", "error", "-ss", seek, "-i", str(video),
-                           "-frames:v", "1", "-q:v", "2", str(frame)], timeout=30)
+        result = proc.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-ss",
+                seek,
+                "-i",
+                str(video),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "2",
+                str(frame),
+            ],
+            timeout=30,
+        )
         if proc.succeeded(result) and frame.exists():
             return frame
     return None
+
+
+def render_still(src: Path, dst: Path, filtergraph: str) -> bool:
+    """Render an image through an ffmpeg -filter_complex graph into a JPEG. dst only appears
+    once it is complete."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_name(f"{dst.name}.{os.getpid()}.part.jpg")  # the TUI and the service may both render
+    result = proc.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(src),
+                       "-filter_complex", filtergraph, "-frames:v", "1", "-q:v", "2", str(tmp)],
+                      timeout=120)
+    if proc.succeeded(result) and tmp.exists():
+        os.replace(tmp, dst)
+        return True
+    tmp.unlink(missing_ok=True)
+    return False
 
 
 class EncodeResult(enum.Enum):
@@ -95,33 +153,88 @@ class EncodeResult(enum.Enum):
     FAILED = "failed"
 
 
-def encode(src: Path, dst: Path, video_filter: str, duration: float,
-           on_progress: Callable[[float], bool]) -> EncodeResult:
+def encode(
+    src: Path,
+    dst: Path,
+    video_filter: str,
+    duration: float,
+    on_progress: Callable[[float], bool],
+    filter_complex: bool = False,
+) -> EncodeResult:
     """Encode src -> dst through an ffmpeg filter, video only (no audio, subtitles or data).
+    With filter_complex, video_filter is a filter graph with one input and one output.
 
     Tries VA-API HEVC first (on the author's Radeon 780M it used about half the CPU time of x264),
     then libx264. on_progress(fraction done) is called as ffmpeg reports progress; returning True
     cancels. dst only appears once the encode has finished.
     """
     dst.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dst.with_name(dst.name + ".part.mp4")
+    tmp = dst.with_name(f"{dst.name}.{os.getpid()}.part.mp4")  # the TUI and the service may both encode
     # -nostdin: ffmpeg otherwise reads the terminal for its own keys (q, ?, …) and steals the
     # TUI's keypresses, including the Esc meant to cancel this encode.
-    base = ["ffmpeg", "-nostdin", "-v", "error", "-nostats", "-progress", "pipe:1", "-y"]
-    video_only = ["-map", "0:v:0", "-an", "-sn", "-dn"]
+    base = [
+        "ffmpeg",
+        "-nostdin",
+        "-v",
+        "error",
+        "-nostats",
+        "-progress",
+        "pipe:1",
+        "-y",
+    ]
+    # A filter graph picks its own input; -map would add the source stream next to its output.
+    video_only = ["-an", "-sn", "-dn"] if filter_complex else ["-map", "0:v:0", "-an", "-sn", "-dn"]
+    filter_flag = "-filter_complex" if filter_complex else "-vf"
     attempts = []
     if paths.VAAPI_DEVICE.exists():
-        attempts.append(base + ["-vaapi_device", str(paths.VAAPI_DEVICE), "-i", str(src), *video_only,
-                                "-vf", f"{video_filter},format=nv12,hwupload",
-                                "-c:v", "hevc_vaapi", "-rc_mode", "CQP", "-qp", "26", str(tmp)])
-    attempts.append(base + ["-i", str(src), *video_only, "-vf", video_filter,
-                            "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-                            "-pix_fmt", "yuv420p", str(tmp)])
+        attempts.append(
+            base
+            + [
+                "-vaapi_device",
+                str(paths.VAAPI_DEVICE),
+                "-i",
+                str(src),
+                *video_only,
+                filter_flag,
+                f"{video_filter},format=nv12,hwupload",
+                "-c:v",
+                "hevc_vaapi",
+                "-rc_mode",
+                "CQP",
+                "-qp",
+                "26",
+                str(tmp),
+            ]
+        )
+    attempts.append(
+        base
+        + [
+            "-i",
+            str(src),
+            *video_only,
+            filter_flag,
+            video_filter,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "21",
+            "-pix_fmt",
+            "yuv420p",
+            str(tmp),
+        ]
+    )
 
     for cmd in attempts:
         try:
-            process = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                       stderr=subprocess.DEVNULL, text=True)
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
         except FileNotFoundError:
             log.error("ffmpeg is not installed")
             return EncodeResult.FAILED
@@ -144,6 +257,10 @@ def encode(src: Path, dst: Path, video_filter: str, duration: float,
         if process.returncode == 0 and tmp.exists():
             os.replace(tmp, dst)
             return EncodeResult.OK
-        log.warning("encoding with %s failed (exit %s)", cmd[cmd.index("-c:v") + 1], process.returncode)
+        log.warning(
+            "encoding with %s failed (exit %s)",
+            cmd[cmd.index("-c:v") + 1],
+            process.returncode,
+        )
         tmp.unlink(missing_ok=True)
     return EncodeResult.FAILED

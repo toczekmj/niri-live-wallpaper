@@ -1,4 +1,4 @@
-"""The video library: the files in paths.VIDEO_DIR."""
+"""The wallpaper library (videos and still images): the files in paths.VIDEO_DIR."""
 
 from __future__ import annotations
 
@@ -6,17 +6,19 @@ import shutil
 from pathlib import Path
 
 from . import config, paths, variants
+from .media import IMAGE_EXTENSIONS
 
 VIDEO_EXTENSIONS = ("mp4", "mkv", "webm", "mov", "avi", "m4v", "gif")
+MEDIA_EXTENSIONS = VIDEO_EXTENSIONS + IMAGE_EXTENSIONS
 
 
 def list_videos() -> list[str]:
-    """File names of the videos in the library, sorted case-insensitively."""
+    """File names of the wallpapers (videos and images) in the library, sorted case-insensitively."""
     if not paths.VIDEO_DIR.is_dir():
         return []
     return sorted(
         (p.name for p in paths.VIDEO_DIR.iterdir()
-         if p.is_file() and p.suffix.lower().lstrip(".") in VIDEO_EXTENSIONS),
+         if p.is_file() and p.suffix.lower().lstrip(".") in MEDIA_EXTENSIONS),
         key=str.lower,
     )
 

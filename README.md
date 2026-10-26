@@ -37,7 +37,8 @@ it like any other window, so it covers your apps. Here the video is drawn by
   - [3. Only one wallpaper program](#3-only-one-wallpaper-program)
   - [4. Install and run](#4-install-and-run)
 - [Usage](#usage)
-  - [Per-video, per-screen settings (e)](#per-video-per-screen-settings-e)
+  - [Per-file, per-screen settings (e)](#per-file-per-screen-settings-e)
+  - [Fit: when the picture and the screen differ in shape](#fit-when-the-picture-and-the-screen-differ-in-shape)
 - [How it works](#how-it-works)
 - [Where everything is stored](#where-everything-is-stored)
   - [config.json format](#configjson-format)
@@ -63,28 +64,30 @@ layout { background-color "transparent"; }
   ○ forest.webm    1920×1080 · 24 fps
 
  Actions
-  › Import videos (fuzzy finder, Tab marks several)
+  › Import videos & images (fuzzy finder, Tab marks several)
   › Open video folder in file manager
   › Stop live wallpaper
   › Cycle wallpapers: [every 1h 30m]
   › Start at login: [on]
   › Ask to lower frame rate on import (>30 fps): [on]
-  › Ask for per-screen frame rate & resolution on import: [off]
+  › Ask for per-screen frame rate, resolution & fit on import: [off]
   › Quit
  ─────────────────────────────────────────────────────────────────────────────────
  wallpaper: playing   autostart: on   cycle: every 1h 30m, next in 52m
 ```
 
 
-- **Video library:** import videos with a fuzzy finder (`fzf`), one or many at once, or drop files into the app's folder. Pick one
+- **Wallpaper library:** import videos and still images (png, jpg, webp, …) with a fuzzy finder (`fzf`), one or many at once, or drop files into the app's folder. Pick one
   with `space` and it becomes your wallpaper.
 - **Start at login:** asked the first time you pick a wallpaper, and toggleable any time.
 - **Cycling:** switch to the next video every hour, day, week, or a custom `hh:mm` interval.
 - **Per-screen performance tuning:** videos bigger than a screen get a downscaled copy made for that screen, so a
   4K video isn't decoded for a 1080p panel. Frame rate (60/30/24/12/custom/original) and resolution (100/75/50/33%/custom)
   can be set per video and per screen. Videos faster than 30 fps trigger a question on import.
+- **Fit, per screen:** when a video or image isn't shaped like a screen, choose per screen whether to fill and crop
+  (from the edge you pick), show black bars, show blurred bars, stretch, or show the original size.
 - **Never plays sound**, even if the file has an audio track.
-- **DMS theming stays in sync:** a still frame of the current video is handed to DMS, so its colour scheme
+- **DMS theming stays in sync:** a still frame of the current video (or the image itself) is handed to DMS, so its colour scheme
   (matugen) and lock screen match the wallpaper.
 - **Setup checks:** the top of the screen shows whether niri's config, other wallpaper programs and the
   session are set up correctly, on any niri setup, with or without DMS.
@@ -229,7 +232,7 @@ Import a video (`i`), select it with `space`, and answer the "start at login?" q
 | `space` / `enter` | on a video: set it as the wallpaper; on an action: run it |
 | `i` | import videos: fuzzy-find videos under your home folder and they're **copied** into the app's video folder. Mark several with `Tab` (`Ctrl-A` marks everything currently shown, e.g. after typing a folder name), or just press `Enter` for one. With several, the frame-rate questions come first, then all copies are encoded; Esc during encoding skips the rest |
 | `o` | open the app's video folder in your file manager (files you drop there appear within a second) |
-| `e` / `f` | edit the selected video's frame rate & resolution, for all screens or per screen |
+| `e` / `f` | edit the selected video's or image's frame rate, resolution & fit, for all screens or per screen (images: fit only) |
 | `d` / `Delete` | delete the selected video (asks first; stops the wallpaper if it's the current one) |
 | `s` | stop the wallpaper (start at login stays as it is) |
 | `a` | toggle start at login |
@@ -246,25 +249,55 @@ Menu-only options:
 - **Ask to lower frame rate on import (>30 fps):** on by default. Importing a video faster than 30 fps (or
   selecting a dropped-in one for the first time) asks whether to convert it to 60/30/24/12/custom fps or keep the
   original.
-- **Ask for per-screen frame rate & resolution on import:** off by default. When on, the settings editor
-  (below) opens on import instead of the frame-rate question.
+- **Ask for per-screen frame rate, resolution & fit on import:** off by default. When on, the settings editor
+  (below) opens on import instead of the questions above.
 
-### Per-video, per-screen settings (`e`)
+### Per-file, per-screen settings (`e`)
 
 ```
-Screen           Frame rate              Resolution
-All screens      30 fps                  50%
-HDMI-A-1         = 30 fps                native (3440×1440)
-eDP-1            24 fps                  = 50% (960×600)
+Screen           Frame rate              Resolution                  Fit
+All screens      30 fps                  50%                         Blurred bars
+HDMI-A-1         = 30 fps                native (3440×1440)          = Blurred bars
+eDP-1            24 fps                  = 50% (960×600)             Fill · left
 ```
 
-- **Frame rate:** 60 / 30 / 24 / 12 / custom / original. Only rates below the source's are offered.
+- **Frame rate:** 60 / 30 / 24 / 12 / custom / original. Only rates below the source's are offered. (Videos only.)
 - **Resolution:** a percentage of that screen's native size: native, 75%, 50%, 33%, or custom 10–100%. mpv
   scales it up to fill the screen. Lower values decode less and save power; 50% looks soft up close but fine
-  behind windows.
+  behind windows. (Videos only; ignored by the "original size" fit.)
+- **Fit:** see below. Images only have this column.
 - A value starting with `= ` is inherited from **All screens**. Choose "Same as all screens" to go back to that.
-- Changes apply as you go. If the video is your current wallpaper, only the screens whose settings changed get
-  a new player; the others keep playing.
+- **Changes are shown live.** Each choice is applied to the running wallpaper as soon as you make it (if it's your
+  current one, only the screens whose settings changed get a new player; the others keep playing). For **Fit**
+  you don't even have to choose: moving the highlight (`j`/`k`) through the fit menu, or through the "which part
+  to keep" menu, shows each option on the wallpaper as you go, and `Esc` in the menu puts the previous fit back.
+  In the table, `Esc` (or Done) keeps what you see; `c` or `q` cancels and puts back the settings you started with.
+  A choice that needs a new copy renders it first: instant for an image, a normal encode for a video (`Esc` during
+  it skips the wait; the wallpaper service finishes the encode in the background, and copies are kept, so
+  browsing back to an option you already saw is instant).
+- **Picking a wallpaper (`space`/`enter`) previews too.** When a new image asks how it should fit, the file is set as
+  your wallpaper the moment the question opens, so you see every option as you move through it. (Cancelling the
+  question keeps the default fit and still sets the wallpaper; you'll be asked again next time.)
+- **Importing previews too, without changing your wallpaper.** While an imported image's fit question is open, the
+  image is shown on screen so you can compare the options. When the questions are done, the wallpaper that was
+  playing (or the stopped state) comes back, and the cycling countdown continues where it was.
+
+### Fit: when the picture and the screen differ in shape
+
+A picture rarely has your screen's exact shape (an ultrawide image on a 16:10 laptop, a 16:9 video on an
+ultrawide). Press `e` and choose the **Fit** for all screens, or a different one for each screen. Importing an
+image that doesn't match one of your screens asks the question straight away; videos start with Fill, and
+you change them with `e`. Nothing changes for a screen whose shape already matches.
+
+| Fit | What you get |
+|---|---|
+| Fill the screen, crop the overflow (default) | No bars; the edges that don't fit are cut off |
+| Fit inside, black bars | The whole picture, with black bars on the short sides |
+| Fit inside, blurred copy behind | The whole picture, with a blurred, enlarged copy of it filling the bars. Needs a copy rendered for that screen: instant for an image, a normal encode for a video |
+| Stretch to the screen | No bars and nothing cut off, but the picture is distorted |
+| Original size, centered | No scaling at all: small pictures float in the middle, large ones are cut off around the edges |
+
+With **Fill**, a second question asks which part to keep: centre, left, right, top or bottom edge.
 
 ## How it works
 
@@ -282,9 +315,12 @@ eDP-1            24 fps                  = 50% (960×600)
   video runs `systemctl --user restart`, and start at login is `systemctl --user enable/disable`. The unit is
   `WantedBy=graphical-session.target`, the same as `dms.service`.
 - **`nlw run`** (the service, `niri_live_wallpaper/service.py`) runs one `mpvpaper` per screen:
-  `mpvpaper -p -o "no-audio loop-file=inf hwdec=auto-safe panscan=1.0 quiet" <output> <file>`.
+  `mpvpaper -p -o "no-audio loop-file=inf hwdec=auto-safe quiet panscan=1.0 …" <output> <file>`.
   - `no-audio`: sound is never decoded or played. `hwdec=auto-safe`: GPU decoding when available.
-    `panscan=1.0`: fill the screen and crop the overflow. `-p`: pause when mpvpaper thinks the wallpaper is hidden.
+    `-p`: pause when mpvpaper thinks the wallpaper is hidden. The last options are the screen's fit:
+    `panscan=1.0` fills and crops (with `video-align-x/y` for the edge you chose), `panscan=0` gives black bars,
+    `keepaspect=no` stretches, `video-unscaled=yes` keeps the original size. Images use
+    `image-display-duration=inf` instead of `loop-file=inf`.
   - Every 30 s, or exactly when a cycle is due, or straight away when the TUI sends `SIGUSR1`, it re-reads the
     config and the list of screens from `niri msg -j outputs`. When a screen's file changes, it starts that
     screen's new player before stopping the old one, so there's no black flash.
@@ -294,11 +330,14 @@ eDP-1            24 fps                  = 50% (960×600)
     restarts it with the current screens.
 - **Per-screen copies.** For each screen, the target size is the screen's resolution × the chosen percentage. A
   copy is encoded only when the source is **bigger** than that target and/or **faster** than the chosen frame
-  rate; otherwise the original file is played. Copies are scaled to cover the target and cropped (same framing as
-  mpv's `panscan`), have no audio, and are encoded with VA-API HEVC (`hevc_vaapi`, QP 26), falling back to
+  rate; otherwise the original file is played. How a copy is scaled follows the screen's fit (fill: cover the target and
+  crop from the chosen edge; black bars: shrink inside it; stretch: scale to its shape; blurred bars: the picture
+  over a blurred copy of itself at the target size, so a copy is always made; original size: only the frame
+  rate is capped). Copies have no audio, and are encoded with VA-API HEVC (`hevc_vaapi`, QP 26), falling back to
   `libx264`. Each copy is made once (on import, first selection, or after `e`) with progress shown; Esc cancels,
   and the original plays until the copy exists. The file name records what was encoded, e.g.
-  `3440x1440@30.mp4`, and two screens with the same target share one file.
+  `3440x1440@30.mp4` (or `…@30-left.mp4`, `…-fit.mp4`, `…-blur.mp4`, `…-stretch.mp4` for the other fits), and two
+  screens with the same target share one file.
 - **Settings are stored as choices, not results.** Screen resolutions are never saved; they're read from niri
   each time, so changing a monitor's mode just produces a new target. Per-screen overrides are keyed by niri's
   connector name (`HDMI-A-1`, `eDP-1`). If you plug a monitor into a different port, it gets the "All screens"
@@ -310,7 +349,7 @@ eDP-1            24 fps                  = 50% (960×600)
 |---|---|
 | Your videos (imported copies and dropped-in files) | `~/.local/share/niri-live-wallpaper/videos/` |
 | App settings | `~/.config/niri-live-wallpaper/config.json` (format below) |
-| Per-screen optimized copies | `~/.cache/niri-live-wallpaper/optimized/<video name>/<width>x<height>@<fps or "src">.mp4` |
+| Per-screen optimized copies | `~/.cache/niri-live-wallpaper/optimized/<video name>/<width>x<height>@<fps or "src">.mp4` (`…-fit`, `…-blur`, `…-stretch` or `-<edge>` before `.mp4` for other fits; images with blurred bars: `…@src-blur.jpg`) |
 | Frames handed to DMS for theming | `~/.cache/niri-live-wallpaper/frames/<video name>.jpg` |
 | systemd unit (written by the app) | `~/.config/systemd/user/niri-live-wallpaper.service` |
 | Start-at-login link (created by `systemctl enable`) | `~/.config/systemd/user/graphical-session.target.wants/niri-live-wallpaper.service` |
@@ -342,11 +381,14 @@ start at login, so after moving the app, do one of those.
     "ocean.mp4": {
       "fps": 30,                       // all screens: fps cap; null = original
       "scale": 50,                     // all screens: % of native resolution; missing = 100
+      "fit": "blur",                   // all screens: fill (default) | fit | blur | stretch | center
+      "align": "left",                 // all screens, fill only: center (default) | left | right | top | bottom
       "screens": {                     // per-screen overrides; a missing key = same as all screens
         "HDMI-A-1": { "scale": 100 },
-        "eDP-1": { "fps": 24 }
+        "eDP-1": { "fps": 24, "fit": "fill", "align": "right" }   // an override's "fit" is always written
       }
-    }
+    },
+    "sunset.png": { "fit": "fit" }     // images only have fit and align
   }
 }
 ```
@@ -386,7 +428,8 @@ niri_live_wallpaper/
   proc.py                    how external programs are run (timeouts, missing programs)
   config.py                  config.json: schema, defaults, migrations
   cycling.py                 cycle schedule maths (pure)
-  library.py                 the video folder: list, import, delete
+  fit.py                     how a picture fits a screen: modes, mpv options, blur filter (pure)
+  library.py                 the wallpaper folder: list, import, delete
   media.py                   ffprobe / ffmpeg: video info, theme frame, encoding
   variants.py                per-screen copies: what to encode (pure), encoding, pruning
   niri.py                    screens, background surfaces, niri config checks

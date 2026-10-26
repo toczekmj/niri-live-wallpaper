@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 from . import proc
-from .library import VIDEO_EXTENSIONS
+from .library import MEDIA_EXTENSIONS
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def open_folder(folder: Path) -> bool:
 
 
 def pick_videos(search_root: Path) -> tuple[list[Path], str | None]:
-    """Let the user fuzzy-find videos under `search_root` with fzf. Tab marks several files;
+    """Let the user fuzzy-find videos and images under `search_root` with fzf. Tab marks several files;
     Enter without marks picks the highlighted one. Returns (picked files, error message);
     no files and no error means the user cancelled.
 
@@ -57,9 +57,9 @@ def pick_videos(search_root: Path) -> tuple[list[Path], str | None]:
     fd = next((name for name in ("fd", "fdfind") if proc.available(name)), None)  # Debian: fdfind
     if fd:
         lister = [fd, "--type", "f", "--absolute-path",
-                  *[a for ext in VIDEO_EXTENSIONS for a in ("-e", ext)], ".", str(search_root)]
+                  *[a for ext in MEDIA_EXTENSIONS for a in ("-e", ext)], ".", str(search_root)]
     else:  # find: skip hidden directories, like fd does
-        names = [a for ext in VIDEO_EXTENSIONS for a in ("-o", "-iname", f"*.{ext}")][1:]
+        names = [a for ext in MEDIA_EXTENSIONS for a in ("-o", "-iname", f"*.{ext}")][1:]
         lister = ["find", str(search_root), "-path", "*/.*", "-prune", "-o",
                   "-type", "f", "(", *names, ")", "-print"]
     preview = ("ffprobe -v error -select_streams v:0 "
@@ -70,7 +70,7 @@ def pick_videos(search_root: Path) -> tuple[list[Path], str | None]:
     try:
         result = subprocess.run(
             ["fzf", "--multi", "--bind=ctrl-a:toggle-all",
-             "--prompt=Import videos > ", "--scheme=path", "--height=100%", "--layout=reverse",
+             "--prompt=Import wallpapers > ", "--scheme=path", "--height=100%", "--layout=reverse",
              "--header=Tab: mark   Ctrl-A: mark all shown   Enter: import   Esc: cancel",
              "--preview", preview, "--preview-window=down,7,wrap"],
             # stderr is left alone: some fzf versions draw their interface on it.

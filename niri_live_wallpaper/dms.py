@@ -40,7 +40,12 @@ def set_wallpaper(image: Path, output_names: list[str]) -> None:
 
 
 def sync_theme(video: Path, output_names: list[str]) -> None:
-    """Point DMS at a still of `video`, so its colours and lock screen match the wallpaper."""
+    """Point DMS at a still of `video` (the file itself for an image), so its colours and lock
+    screen match the wallpaper."""
+    if media.is_image(video):
+        if proc.available("dms"):
+            set_wallpaper(video, output_names)
+        return
     if not (proc.available("ffmpeg") and proc.available("dms")):
         return
     frame = media.extract_frame(video)

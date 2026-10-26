@@ -22,8 +22,9 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from typing import NamedTuple
 
-from . import config, cycling, dms, library, niri, paths, proc, systemd, variants
+from . import config, cycling, dms, fit, library, media, niri, paths, proc, systemd, variants
 from .media import EncodeResult
 
 log = logging.getLogger(__name__)
@@ -31,9 +32,32 @@ log = logging.getLogger(__name__)
 RUN_TICK = 30  # seconds between checks when nothing else wakes us
 
 # no-audio: never decode or play sound, even if the file has an audio track.
-# hwdec=auto-safe: GPU decoding when available. panscan=1.0: fill the screen, crop the overflow.
+# hwdec=auto-safe: GPU decoding when available.
 # quiet: no status line, otherwise mpv logs "V: 00:00:17 / ..." to the journal twice a second.
-MPV_OPTIONS = "no-audio loop-file=inf hwdec=auto-safe panscan=1.0 quiet"
+# How the picture is fitted to the screen is added per screen (fit.mpv_options()).
+MPV_OPTIONS = "no-audio loop-file=inf hwdec=auto-safe quiet"
+# Images: show forever instead of looping, which would reload the file in a tight loop.
+MPV_IMAGE_OPTIONS = "no-audio image-display-duration=inf quiet"
+
+
+class Play(NamedTuple):
+    """What one output shows: a file and the mpv options to show it with."""
+    path: Path
+    options: str
+
+
+def play_for(name: str, job: variants.ScreenJob | None) -> Play:
+    original = paths.VIDEO_DIR / name
+    path = variants.path_to_play(name, job) if job else original
+    mode, align = (job.fit_mode, job.align) if job else (fit.DEFAULT_FIT, fit.DEFAULT_ALIGN)
+    if path != original:
+        # The copy is already framed for the screen: cropped, or with its blurred bars.
+        if mode in ("fill", "blur"):
+            mode, align = "fill", fit.DEFAULT_ALIGN  # (fill: any rounding slack is cropped)
+    elif mode == "blur":
+        mode = "fit"  # no copy (yet, or the shapes match): black bars rather than a crop
+    base = MPV_IMAGE_OPTIONS if media.is_image(path) else MPV_OPTIONS
+    return Play(path, f"{base} {fit.mpv_options(mode, align)}")
 
 
 class Players:
@@ -41,10 +65,10 @@ class Players:
 
     def __init__(self) -> None:
         self.processes: dict[str, subprocess.Popen] = {}
-        self.playing: dict[str, Path] = {}
+        self.playing: dict[str, Play] = {}
 
-    def show(self, wanted: dict[str, Path]) -> dict[str, Path]:
-        """Make each output play its file in `wanted`. Returns the outputs that changed.
+    def show(self, wanted: dict[str, Play]) -> dict[str, Play]:
+        """Make each output play what `wanted` says. Returns the outputs that changed.
 
         Only outputs whose file changed are touched. New players start before the old ones stop,
         so the screen doesn't flash black while switching.
@@ -67,11 +91,11 @@ class Players:
         self.processes, self.playing = {}, {}
 
     @staticmethod
-    def _start(output: str, path: Path) -> subprocess.Popen:
+    def _start(output: str, play: Play) -> subprocess.Popen:
         # -p: pause when the compositor stops sending frame callbacks (wallpaper hidden).
         # stdin=DEVNULL: mpv reads keys from a terminal; when `nlw run` is started by hand,
         # several players would fight over it.
-        return subprocess.Popen(["mpvpaper", "-p", "-o", MPV_OPTIONS, output, str(path)],
+        return subprocess.Popen(["mpvpaper", "-p", "-o", play.options, output, str(play.path)],
                                 stdin=subprocess.DEVNULL)
 
     @staticmethod
@@ -129,12 +153,12 @@ def run() -> int:
                                 name, ", ".join(failed))
                 prepared = (name, jobs)
 
-            wanted = ({job.output: variants.path_to_play(name, job) for job in jobs}
-                      or {"ALL": paths.VIDEO_DIR / name})  # not on niri / no output info
+            wanted = ({job.output: play_for(name, job) for job in jobs}
+                      or {"ALL": play_for(name, None)})  # not on niri / no output info
             if wanted != players.playing:
                 changed = players.show(wanted)
                 log.info("playing %s: %s", name,
-                         ", ".join(f"{out}={path.name}" for out, path in changed.items()))
+                         ", ".join(f"{out}={play.path.name}" for out, play in changed.items()))
                 if name != themed_video:
                     dms.sync_theme(paths.VIDEO_DIR / name, [o.name for o in outputs])
                     themed_video = name
