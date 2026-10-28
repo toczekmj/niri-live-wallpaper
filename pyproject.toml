@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "niri-live-wallpaper"
-version = "0.1.0"  # keep in sync with niri_live_wallpaper/__init__.py
+version = "0.2.0"  # keep in sync with niri_live_wallpaper/__init__.py
 description = "Video wallpapers for the niri compositor, made to work with DankMaterialShell"
 readme = "README.md"
 license = "MIT"

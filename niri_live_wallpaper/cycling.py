@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .config import Config
+from .config import Config, cycle_settings
 
 
 @dataclass(frozen=True)
 class CycleMode:
-    key: str              # stored in config["cycle"]["mode"]
+    key: str              # stored as the "mode" of the cycle setting (config.cycle_settings())
     label: str            # shown in the menu
     minutes: int | None   # interval; None = user-defined ("custom")
 
@@ -35,7 +35,7 @@ DEFAULT_CUSTOM_MINUTES = 60
 
 def interval_minutes(cfg: Config) -> int | None:
     """Interval in minutes, or None when cycling is off."""
-    cycle = cfg.get("cycle", {})
+    cycle = cycle_settings(cfg)
     key = cycle.get("mode", "off")
     if key == "custom":
         return cycle.get("minutes") or None
@@ -44,12 +44,12 @@ def interval_minutes(cfg: Config) -> int | None:
 
 def saved_custom_minutes(cfg: Config) -> int:
     """The last custom interval, to prefill the hh:mm dialog."""
-    return cfg.get("cycle", {}).get("minutes") or DEFAULT_CUSTOM_MINUTES
+    return cycle_settings(cfg).get("minutes") or DEFAULT_CUSTOM_MINUTES
 
 
 def new_cycle_settings(cfg: Config, mode_key: str, custom_minutes: int | None) -> dict:
     """The "cycle" value after choosing a mode. Choosing a preset keeps the last custom interval."""
-    cycle = dict(cfg.get("cycle", {}))
+    cycle = dict(cycle_settings(cfg))
     cycle["mode"] = mode_key
     cycle["minutes"] = custom_minutes if custom_minutes is not None else saved_custom_minutes(cfg)
     return cycle
@@ -78,7 +78,7 @@ def label(cfg: Config) -> str:
     if not minutes:
         return "off"
     presets = {"hourly": "every hour", "daily": "every day", "weekly": "every week"}
-    return presets.get(cfg["cycle"]["mode"], f"every {format_interval(minutes)}")
+    return presets.get(cycle_settings(cfg)["mode"], f"every {format_interval(minutes)}")
 
 
 def seconds_until_next(cfg: Config, now: float) -> float | None:

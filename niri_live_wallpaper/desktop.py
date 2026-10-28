@@ -74,10 +74,11 @@ def pick_videos(search_root: Path) -> tuple[list[Path], str | None]:
              "--header=Tab: mark   Ctrl-A: mark all shown   Enter: import   Esc: cancel",
              "--preview", preview, "--preview-window=down,7,wrap"],
             # stderr is left alone: some fzf versions draw their interface on it.
-            stdin=files.stdout, stdout=subprocess.PIPE, text=True,
+            stdin=files.stdout, stdout=subprocess.PIPE, text=True, check=False,
         )
     finally:
-        files.stdout.close()
+        if files.stdout:
+            files.stdout.close()
         files.terminate()
     if result.returncode == 2:  # fzf's exit code for errors
         return [], "fzf failed (see the terminal output above); fzf 0.33 or newer is needed"
@@ -85,6 +86,53 @@ def pick_videos(search_root: Path) -> tuple[list[Path], str | None]:
 
 
 FZF_MIN_VERSION = (0, 33)  # --scheme=path
+
+
+def fzf_menu(
+    rows: list[tuple[str, str]],
+    label: str,
+    prompt: str,
+    header: str,
+    multi: bool = False,
+    expect: tuple[str, ...] = (),
+) -> tuple[str | None, list[str], str | None]:
+    """Show `rows` (key, text shown) in a box in the middle of the terminal and let the user pick.
+
+    Returns (key pressed, picked keys, error message). The key pressed is "" for Enter, or one of
+    `expect` (fzf key names such as "ctrl-r"); picked keys are the highlighted row, or the marked
+    rows with `multi` (Tab marks). A cancel (Esc) returns (None, [], None).
+
+    Takes over the terminal: the caller must suspend curses first.
+    """
+    problem = fzf_problem()
+    if problem:
+        return None, [], problem
+    command = ["fzf", "--delimiter=\t", "--with-nth=2..", "--no-sort", "--layout=reverse",
+               "--height=100%", "--margin=10%,18%", "--padding=1", "--border=rounded",
+               f"--border-label= {label} ", f"--prompt={prompt}", f"--header={header}"]
+    if multi:
+        command += ["--multi", "--bind=ctrl-a:toggle-all"]
+    if expect:
+        command.append("--expect=" + ",".join(expect))
+    # stderr is left alone: some fzf versions draw their interface on it.
+    result = subprocess.run(command, input="\n".join(f"{key}\t{text}" for key, text in rows),
+                            stdout=subprocess.PIPE, text=True, check=False)
+    if result.returncode == 2:  # fzf's exit code for errors
+        return None, [], "fzf failed (see the terminal output above)"
+    if result.returncode not in (0, 1) or (not result.stdout and not expect):
+        return None, [], None
+    key, picked = parse_menu_output(result.stdout, bool(expect))
+    if not picked and not key:
+        return None, [], None
+    return key, picked, None
+
+
+def parse_menu_output(output: str, expecting: bool) -> tuple[str, list[str]]:
+    """fzf output for fzf_menu(): with --expect the first line is the key pressed (empty for
+    Enter), then one "<row key>\t<text>" line per picked row."""
+    lines = output.splitlines()
+    key = lines.pop(0) if expecting and lines else ""
+    return key, [line.split("\t", 1)[0] for line in lines if line.strip()]
 
 
 def fzf_problem() -> str | None:

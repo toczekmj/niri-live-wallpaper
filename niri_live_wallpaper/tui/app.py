@@ -25,6 +25,7 @@ from .. import (
     media,
     niri,
     paths,
+    playlists,
     proc,
     systemd,
     variants,
@@ -33,6 +34,7 @@ from ..media import EncodeResult
 from . import style
 from .dialogs import Dialogs
 from .formatting import copy_text, describe_video, human_duration, import_summary
+from .playlist_manager import PlaylistManager
 from .settings_editor import CANCEL, SettingsEditor
 
 log = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ log = logging.getLogger(__name__)
 ACTIONS = [
     ("import", "Import videos & images (fuzzy finder, Tab marks several)"),
     ("open", "Open video folder in file manager"),
+    ("playlists", None),
     ("stop", "Stop live wallpaper"),
     ("cycle", None),
     ("autostart", None),
@@ -64,8 +67,9 @@ class App:
         self.screen = screen
         self.dialogs = Dialogs(screen)
         self.editor = SettingsEditor(screen, self.dialogs, redraw=self.draw)
+        self.playlist_ui = PlaylistManager(screen, self.dialogs, redraw=self.draw)
         self.cfg = config.load()
-        self.videos = library.list_videos()
+        self.videos = library.list_active(self.cfg)
         self.cursor = 0
         self.message, self.message_is_error = "", False
         self.has_mpvpaper = proc.available("mpvpaper")
@@ -109,8 +113,8 @@ class App:
         cycled), keeping the cursor on the same entry."""
         items = self.items()
         current = items[self.cursor] if self.cursor < len(items) else None
-        self.videos = library.list_videos()
         self.cfg = config.load()
+        self.videos = library.list_active(self.cfg)
         items = self.items()
         self.cursor = (
             items.index(current)
@@ -124,8 +128,12 @@ class App:
             log.warning("%s", text)
 
     def action_label(self, action: str) -> str:
+        if action == "playlists":
+            return f"Playlists: [{config.active_playlist(self.cfg) or 'all wallpapers'}]  (create, rename, delete, add & remove files)"
         if action == "cycle":
-            return f"Cycle wallpapers: [{cycling.label(self.cfg)}]"
+            playlist = config.active_playlist(self.cfg)
+            return (f"Cycle the playlist {playlist}: [{cycling.label(self.cfg)}]" if playlist
+                    else f"Cycle wallpapers: [{cycling.label(self.cfg)}]")
         if action == "autostart":
             return f"Start at login: [{'on' if self.autostart else 'off'}]"
         if action == "askfps":
@@ -179,11 +187,14 @@ class App:
         h, _ = self.screen.getmaxyx()
         heading = style.color(style.HEADER) | curses.A_BOLD
         # Rows: ("header", text) | ("item", index into items()) | ("note", text) | ("blank", "")
-        rows: list[tuple[str, Any]] = [
-            ("header", f"Wallpapers  ({paths.tilde(paths.VIDEO_DIR)})")
-        ]
+        playlist = config.active_playlist(self.cfg)
+        title = (f"Playlist {playlist}  ({len(self.videos)})" if playlist
+                 else f"Wallpapers  ({paths.tilde(paths.VIDEO_DIR)})")
+        rows: list[tuple[str, Any]] = [("header", title)]
         if self.videos:
             rows += [("item", i) for i in range(len(self.videos))]
+        elif playlist:
+            rows.append(("note", "This playlist is empty. Press p to add files, or i to import into it."))
         else:
             rows.append(
                 ("note", "No wallpapers yet. Import one or drop files into the folder.")
@@ -231,6 +242,8 @@ class App:
             f"wallpaper: {'playing' if self.active else 'stopped'}",
             f"autostart: {'on' if self.autostart else 'off'}",
         ]
+        if config.active_playlist(self.cfg):
+            status.append(f"playlist: {config.active_playlist(self.cfg)}")
         remaining = cycling.seconds_until_next(self.cfg, time.time())
         if remaining is not None:
             status.append(
@@ -255,13 +268,15 @@ class App:
             y + 3,
             1,
             "↑↓/jk move   space/enter select wallpaper or run action   "
-            "e fps/resolution/fit   d delete   s stop",
+            "e fps/resolution/fit   "
+            f"d {'remove from playlist' if config.active_playlist(self.cfg) else 'delete'}   s stop",
             curses.A_DIM,
         )
         self.put(
             y + 4,
             1,
-            "i import   o open folder   a autostart   c copy niri config   q quit",
+            "i import   o open folder   p playlists   + add to playlist   a autostart   "
+            "c copy niri config   q quit",
             curses.A_DIM,
         )
 
@@ -283,7 +298,7 @@ class App:
             name, info, before or {}, niri.outputs(), heading,
             on_change=lambda entry: self.preview(name, entry),
         )
-        if after is CANCEL:
+        if not isinstance(after, dict):  # CANCEL
             self.restore(name, before)
             return None
         self.cfg = config.save_video_entry(name, after)
@@ -323,7 +338,7 @@ class App:
             self.cfg = config.load()
         else:
             self.cfg = config.save_video_entry(name, before)
-        variants.prune(name, variants.jobs_for(self.cfg, name, niri.outputs()))
+        variants.prune(name, variants.jobs_everywhere(self.cfg, name, niri.outputs()))
         if name == self.cfg.get("wallpaper") and self.active:
             systemd.reload()
 
@@ -331,7 +346,7 @@ class App:
         """Import question for a picture that doesn't match a screen's shape: how it fits all
         screens (per-screen choices are made with `e`)."""
 
-        def entry_for(choice: tuple[str, str]) -> dict[str, Any]:
+        def entry_for(choice: Any) -> dict[str, Any]:  # (fit, align): there is no "inherit" here
             entry: dict[str, Any] = {}
             config.set_fit(entry, *choice)
             return entry
@@ -340,11 +355,11 @@ class App:
             name, info, niri.outputs(), (fit.DEFAULT_FIT, fit.DEFAULT_ALIGN), reason,
             on_preview=lambda choice: self.preview(name, entry_for(choice)),
         )
-        if choice is CANCEL:
+        if isinstance(choice, tuple):
+            self.cfg = config.save_video_entry(name, entry_for(choice))
+        else:  # CANCEL, or INHERIT (which is only offered per screen)
             config.forget_video(name)  # previews saved it; cancelled means ask again next time
             self.cfg = config.load()
-        else:
-            self.cfg = config.save_video_entry(name, entry_for(choice))
 
     @contextmanager
     def borrowed_wallpaper(self) -> Iterator[None]:
@@ -478,13 +493,14 @@ class App:
         if kind != "video":
             self.say("Move to a wallpaper to edit its settings")
             return
-        changed = self.edit_video(name)
+        playlist = config.active_playlist(self.cfg)
+        changed = self.edit_video(name, heading=f"{name} · in the playlist {playlist}" if playlist else None)
         if changed is None:
             self.say("Cancelled, settings put back")
             return
         # Copies only the old settings needed go (this also clears what previews left behind). A
         # disconnected screen's copy is rebuilt by the service when that screen comes back.
-        variants.prune(name, variants.jobs_for(self.cfg, name, niri.outputs()))
+        variants.prune(name, variants.jobs_everywhere(self.cfg, name, niri.outputs()))
         if not changed:
             if not self.message_is_error:
                 self.say("Settings unchanged")
@@ -496,11 +512,15 @@ class App:
             self.say(f"Saved settings for {name}")
 
     def set_cycle(self) -> None:
-        current = self.cfg.get("cycle", {}).get("mode", "off")
+        playlist = config.active_playlist(self.cfg)
+        current = config.cycle_settings(self.cfg).get("mode", "off")
         default = next((i for i, m in enumerate(cycling.MODES) if m.key == current), 0)
         self.draw()
         i = self.dialogs.choose(
-            "Change to the next video:", [m.label for m in cycling.MODES], default
+            f"Change to the next wallpaper in the playlist {playlist}:" if playlist
+            else "Change to the next video:",
+            [m.label for m in cycling.MODES],
+            default,
         )
         if i is None:
             return
@@ -517,9 +537,9 @@ class App:
             )
             if custom_minutes is None:
                 return
-        changes: dict[str, Any] = {
-            "cycle": cycling.new_cycle_settings(self.cfg, mode.key, custom_minutes)
-        }
+        changes: dict[str, Any] = config.cycle_changes(
+            config.load(), cycling.new_cycle_settings(self.cfg, mode.key, custom_minutes)
+        )
         if cycling.interval_minutes(self.cfg) is None:
             changes["last_change"] = (
                 time.time()
@@ -565,6 +585,10 @@ class App:
         if kind != "video":
             self.say("Move to a video to delete it")
             return
+        playlist = config.active_playlist(self.cfg)
+        if playlist:
+            self.remove_from_playlist(playlist, name)
+            return
         is_current = name == self.cfg.get("wallpaper")
         question = f"Delete {name}?" + (
             " It is your current wallpaper." if is_current else ""
@@ -586,6 +610,61 @@ class App:
         self.say(
             f"Deleted {name}" + (" and stopped the wallpaper" if is_current else "")
         )
+
+    # ------------------------------------------------------------------ playlists
+
+    def remove_from_playlist(self, playlist: str, name: str) -> None:
+        """d in a playlist: the file leaves the playlist, not the library."""
+        if not self.dialogs.confirm(
+            f"Remove {name} from the playlist {playlist}? The file stays in the library"
+        ):
+            self.say("Cancelled")
+            return
+        config.update(**playlists.remove(config.load(), playlist, [name]))
+        self.sync_playlist()
+        self.say(f"Removed {name} from {playlist}")
+
+    def manage_playlists(self) -> None:
+        """p: the playlist popup. Picking a playlist (or "all wallpapers") in it switches to it."""
+        result = self.playlist_ui.run()
+        if result.switch:
+            # Each playlist has its own cycle: its countdown starts now.
+            config.update(**playlists.activate(result.playlist), last_change=time.time())
+        self.sync_playlist()
+        if result.switch:
+            self.cursor = 0  # (after the sync, which keeps the cursor on the same entry)
+            self.say(f"Playing from the playlist {result.playlist}" if result.playlist
+                     else "Playing from all wallpapers")
+        elif result.message:
+            self.say(result.message, error=result.error)
+
+    def add_to_playlist(self) -> None:
+        """+: add the selected wallpaper to playlists (it keeps its current settings there)."""
+        kind, name = self.selected()
+        if kind != "video":
+            self.say("Move to a wallpaper to add it to a playlist")
+            return
+        result = self.playlist_ui.add_to_playlists(name)
+        self.cfg = config.load()
+        if result.message:
+            self.say(result.message, error=result.error)
+
+    def sync_playlist(self) -> None:
+        """After the playlists or the active one changed: make sure what plays belongs to the
+        active playlist (else switch to its first file), has its copies for the settings it has
+        there, and tell the service."""
+        self.cfg = config.load()
+        current = self.cfg.get("wallpaper")
+        files = library.list_active(self.cfg)
+        if config.active_playlist(self.cfg) and files and current not in files:
+            self.optimize(files[0])
+            self.cfg = config.update(wallpaper=files[0], last_change=time.time())
+        elif current and (paths.VIDEO_DIR / current).is_file():
+            self.optimize(current)
+        if self.active and self.cfg.get("wallpaper"):
+            systemd.reload()
+        self.refresh_status()
+        self.rescan()
 
     def copy_rule(self) -> None:
         if desktop.copy_to_clipboard(niri.STATIONARY_SNIPPET):
@@ -639,6 +718,9 @@ class App:
                 failed.append(f"{src.name} ({e.strerror or e})")
                 continue
             (existing if existed else imported).append(name)
+        playlist = config.active_playlist(self.cfg)
+        if playlist and (imported or existing):  # importing while in a playlist adds to it
+            config.update(**playlists.add(config.load(), playlist, imported + existing))
         self.rescan()
         if imported or existing:
             self.cursor = self.videos.index((imported or existing)[0])
@@ -649,6 +731,9 @@ class App:
             for name in imported:
                 self.selecting = name
                 self.maybe_ask(name)
+        if playlist and imported:  # what was answered in the playlist counts for the library too
+            config.update(**playlists.share_with_library(config.load(), playlist, imported))
+            self.cfg = config.load()
         note = ""
         for i, name in enumerate(imported, 1):
             result = self.optimize(name, counter(i) if len(imported) > 1 else "")
@@ -678,6 +763,7 @@ class App:
         handler = {
             "import": self.import_videos,
             "open": self.open_folder,
+            "playlists": self.manage_playlists,
             "stop": self.stop,
             "cycle": self.set_cycle,
             "autostart": self.toggle_autostart,
@@ -695,6 +781,8 @@ class App:
         shortcuts = {
             ord("i"): self.import_videos,
             ord("o"): self.open_folder,
+            ord("p"): self.manage_playlists,
+            ord("+"): self.add_to_playlist,
             ord("a"): self.toggle_autostart,
             ord("d"): self.delete,
             curses.KEY_DC: self.delete,

@@ -147,6 +147,53 @@ class Dialogs:
         finally:
             curses.curs_set(0)
 
+    def ask_text(
+        self,
+        prompt: str,
+        hint: str,
+        validate: Callable[[str], str],
+        text: str = "",
+        max_len: int = 40,
+    ) -> str | None:
+        """Read a line of free text (any printable characters, accents included).
+
+        validate(text) returns the value to use or raises ValueError with a message to show under
+        the input. Returns the validated value, or None on Esc.
+        """
+        error = ""
+        win, box_w = self._window([prompt, "", "", ""], width=max(len(prompt), len(hint), max_len + 4))
+        curses.curs_set(1)
+        self.screen.timeout(-1)
+        try:
+            while True:
+                win.erase()
+                win.box()
+                put_clipped(win, 1, 3, prompt, box_w - 6, curses.A_BOLD)
+                put_clipped(win, 4, 3, error or hint, box_w - 6,
+                            style.color(style.ERROR) if error else curses.A_DIM)
+                put_clipped(win, 2, 3, f"> {text}", box_w - 6)  # last, so the cursor ends up here
+                win.refresh()
+                try:
+                    key = self.screen.get_wch()
+                except KeyboardInterrupt:
+                    return None
+                if key == "\x1b":
+                    return None
+                if key in ("\n", "\r", curses.KEY_ENTER):
+                    try:
+                        return validate(text)
+                    except ValueError as e:
+                        error = str(e)
+                elif key in style.BACKSPACE or key == "\x7f" or key == "\b":
+                    text = text[:-1]
+                    error = ""
+                elif isinstance(key, str) and key.isprintable() and len(text) < max_len:
+                    text += key
+                    error = ""
+        finally:
+            self.screen.timeout(style.IDLE_TIMEOUT_MS)
+            curses.curs_set(0)
+
     def ask_number(self, prompt: str, low: int, high: int) -> int | None:
         """Read a whole number in [low, high]. Returns it, or None on Esc."""
 

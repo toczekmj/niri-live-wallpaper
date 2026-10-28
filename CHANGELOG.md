@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/2.0.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-28
 
 ### Added
 
@@ -17,6 +17,12 @@ All notable changes to this project are documented here. The format follows
   stretch or original size. When cropping, pick which edge to keep. The choice is made per screen in the settings
   editor (`e`), which gets a Fit column; importing an image that doesn't match a screen asks right away. Copies
   made for a screen follow the fit, and their file names record it.
+
+- Playlists: named sets of wallpapers you create, rename, delete and fill (`p`, a fuzzy-finder popup; `+` adds the
+  highlighted wallpaper). Pick one to show and play only its files; with none, everything plays as before. A file
+  has its own settings (fit, frame rate, resolution, per-screen choices) in every playlist, copied from its
+  settings when you add it. In a playlist, `d` removes a file from it, and importing adds to it. Every playlist
+  has its own cycle time; "all wallpapers" keeps the existing one.
 
 ### Changed
 
@@ -51,5 +57,4 @@ First public release.
   `~/.local/state/niri-live-wallpaper/tui.log` (TUI), unit tests (`python3 -m unittest`), an AUR recipe in
   `packaging/aur/`, and the MIT license.
 
-[Unreleased]: https://github.com/toczekmj/niri-live-wallpaper/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/toczekmj/niri-live-wallpaper/releases/tag/v0.1.0

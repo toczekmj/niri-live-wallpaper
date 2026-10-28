@@ -9,11 +9,19 @@ Schema, version 2:
     wallpaper           str    current video: a file name in paths.VIDEO_DIR
     last_change         float  Unix time the wallpaper last changed (drives cycling)
     cycle               {"mode": "off"|"hourly"|"daily"|"weekly"|"custom",
-                         "minutes": int}   custom interval, kept when a preset is chosen
+                         "minutes": int}   custom interval, kept when a preset is chosen; the
+                        cycle of "all files" (a playlist has its own, see "playlists")
     autostart_prompted  bool   the "start at login?" question was asked
     ask_fps             bool   ask to lower the frame rate on import (default True)
     ask_screens         bool   open the per-screen editor on import (default False)
     videos              {file name: video settings}, see video_entry()
+    playlists           {playlist name: {"items": {file name: video settings or null},
+                                         "cycle": {...}}}: a playlist lists files of the library,
+                        each with its own copy of the settings (null = the user was never asked),
+                        and has its own cycle (same format as above; missing = off), see
+                        "Playlists" below
+    playlist            str    the active playlist: shown in the TUI and the only files that play;
+                        missing = all files of the library
 
 Both the TUI and the background service write this file, so every write is a load-modify-save
 (update()) and the file is replaced atomically.
@@ -24,6 +32,7 @@ from the previous version, and add a test to tests/test_config.py.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -113,8 +122,48 @@ def ask_screens(cfg: Config) -> bool:
 # --------------------------------------------------------------------------- per-video settings
 
 
+# Playlists. A playlist lists files of the library; each entry in it holds that file's settings *in
+# that playlist*. Adding a file copies its settings, after that the two are independent: photo1.png
+# can fill-and-crop in one playlist and have black bars in another. While a playlist is active
+# (cfg["playlist"]), every settings function below works on its entries, so the rest of the app
+# doesn't need to know; with none active they work on the library's own settings (cfg["videos"]).
+
+def active_playlist(cfg: Config) -> str | None:
+    """The active playlist's name, or None (all files); ignores a name that no longer exists."""
+    name = cfg.get("playlist")
+    return name if name in cfg.get("playlists", {}) else None
+
+
+def playlist_items(cfg: Config, playlist: str) -> dict[str, dict[str, Any] | None]:
+    """File name -> settings of the files in `playlist` (the dict lives inside `cfg`)."""
+    return cfg["playlists"][playlist].setdefault("items", {})
+
+
+def _active_items(cfg: Config) -> dict[str, dict[str, Any] | None] | None:
+    playlist = active_playlist(cfg)
+    return playlist_items(cfg, playlist) if playlist else None
+
+
+def cycle_settings(cfg: Config) -> dict[str, Any]:
+    """The cycle setting that applies now: the active playlist's, or the one for all files."""
+    playlist = active_playlist(cfg)
+    source = cfg["playlists"][playlist] if playlist else cfg
+    return source.get("cycle", {})
+
+
+def cycle_changes(cfg: Config, cycle: dict[str, Any]) -> Config:
+    """The changes for update() that make `cycle` the cycle setting that applies now."""
+    playlist = active_playlist(cfg)
+    if not playlist:
+        return {"cycle": cycle}
+    playlists = copy.deepcopy(cfg["playlists"])
+    playlists[playlist]["cycle"] = cycle
+    return {"playlists": playlists}
+
+
 def video_entry(cfg: Config, name: str) -> dict[str, Any] | None:
-    """Settings of one video, or None if the user was never asked about it:
+    """Settings of one file (in the active playlist, if `name` is in it), or None if the user was
+    never asked about it:
 
     {"fps": int | None,       all screens: frame-rate cap, None = original
      "scale": int,            all screens: % of native resolution, missing = 100
@@ -126,7 +175,20 @@ def video_entry(cfg: Config, name: str) -> dict[str, Any] | None:
     "center". An override's "fit" and "align" belong together: "fit" there is always stored, even
     when it is "fill", so it can undo a different fit set for all screens.
     """
+    items = _active_items(cfg)
+    if items is not None and name in items:
+        return items[name]
     return cfg.get("videos", {}).get(name)
+
+
+def entries_of(cfg: Config, name: str) -> list[dict[str, Any] | None]:
+    """The settings of `name` everywhere: the library's own, then one per playlist it is in."""
+    entries = [cfg.get("videos", {}).get(name)]
+    for playlist in cfg.get("playlists", {}):
+        items = playlist_items(cfg, playlist)
+        if name in items:
+            entries.append(items[name])
+    return entries
 
 
 def set_fit(target: dict[str, Any], mode: str, align: str, keep_default: bool = False) -> None:
@@ -142,7 +204,11 @@ def set_fit(target: dict[str, Any], mode: str, align: str, keep_default: bool = 
 
 def screen_fit(cfg: Config, name: str, output: str) -> tuple[str, str]:
     """Effective (fit mode, crop focus) of a file on one output; the defaults for unknown values."""
-    entry = video_entry(cfg, name) or {}
+    return screen_fit_of(video_entry(cfg, name) or {}, output)
+
+
+def screen_fit_of(entry: dict[str, Any], output: str) -> tuple[str, str]:
+    """Like screen_fit(), for a settings entry."""
     override = entry.get("screens", {}).get(output, {})
     source = override if "fit" in override else entry
     mode, align = source.get("fit", fit.DEFAULT_FIT), source.get("align", fit.DEFAULT_ALIGN)
@@ -150,20 +216,49 @@ def screen_fit(cfg: Config, name: str, output: str) -> tuple[str, str]:
 
 
 def save_video_entry(name: str, entry: dict[str, Any]) -> Config:
-    videos = load().get("videos", {})
+    """Store the settings of `name` (in the active playlist, if it is in it)."""
+    cfg = load()
+    items = _active_items(cfg)
+    if items is not None and name in items:
+        items[name] = entry
+        return update(playlists=cfg["playlists"])
+    videos = cfg.get("videos", {})
     videos[name] = entry
     return update(videos=videos)
 
 
 def forget_video(name: str) -> None:
-    videos = load().get("videos", {})
-    if videos.pop(name, None) is not None:
-        update(videos=videos)
+    """Back to "never asked" for `name` (in the active playlist, if it is in it)."""
+    cfg = load()
+    items = _active_items(cfg)
+    if items is not None and name in items:
+        if items[name] is not None:
+            items[name] = None
+            update(playlists=cfg["playlists"])
+    elif cfg.get("videos", {}).pop(name, None) is not None:
+        update(videos=cfg["videos"])
+
+
+def purge_video(name: str) -> None:
+    """Remove every trace of `name`: its settings in the library and in all playlists."""
+    cfg = load()
+    changes: dict[str, Any] = {}
+    if cfg.get("videos", {}).pop(name, "-") != "-":
+        changes["videos"] = cfg["videos"]
+    for playlist in cfg.get("playlists", {}):
+        if playlist_items(cfg, playlist).pop(name, "-") != "-":
+            changes["playlists"] = cfg["playlists"]
+    if changes:
+        update(**changes)
 
 
 def screen_settings(cfg: Config, name: str, output: str) -> tuple[int | None, int]:
     """Effective (fps cap or None for original, resolution percent) of a video on one output."""
-    entry = video_entry(cfg, name) or {}
+    return screen_settings_of(video_entry(cfg, name) or {}, output)
+
+
+def screen_settings_of(entry: dict[str, Any], output: str) -> tuple[int | None, int]:
+    """Like screen_settings(), for a settings entry."""
     override = entry.get("screens", {}).get(output, {})
     fps = override["fps"] if "fps" in override else entry.get("fps")
     scale = override["scale"] if "scale" in override else entry.get("scale", 100)

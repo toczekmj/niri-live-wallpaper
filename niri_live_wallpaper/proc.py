@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+from typing import TypeGuard
 
 log = logging.getLogger(__name__)
 
@@ -31,12 +32,13 @@ def run(
     capture=False discards output instead of capturing it, which is needed for programs that fork
     a background child holding the pipes open (wl-copy).
     """
-    streams = {"capture_output": True} if capture else {
-        "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    discard = None if capture else subprocess.DEVNULL
     try:
-        if input is None:
-            streams["stdin"] = subprocess.DEVNULL
-        return subprocess.run(args, input=input, text=True, timeout=timeout, **streams)
+        return subprocess.run(
+            args, input=input, text=True, timeout=timeout, check=False,
+            capture_output=capture, stdout=discard, stderr=discard,
+            stdin=subprocess.DEVNULL if input is None else None,
+        )
     except FileNotFoundError:
         log.warning("%s is not installed", args[0])
     except subprocess.TimeoutExpired:
@@ -46,7 +48,7 @@ def run(
     return None
 
 
-def succeeded(result: subprocess.CompletedProcess[str] | None) -> bool:
+def succeeded(result: subprocess.CompletedProcess[str] | None) -> TypeGuard[subprocess.CompletedProcess[str]]:
     return result is not None and result.returncode == 0
 
 

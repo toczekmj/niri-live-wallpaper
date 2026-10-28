@@ -24,7 +24,19 @@ import time
 from pathlib import Path
 from typing import NamedTuple
 
-from . import config, cycling, dms, fit, library, media, niri, paths, proc, systemd, variants
+from . import (
+    config,
+    cycling,
+    dms,
+    fit,
+    library,
+    media,
+    niri,
+    paths,
+    proc,
+    systemd,
+    variants,
+)
 from .media import EncodeResult
 
 log = logging.getLogger(__name__)
@@ -132,10 +144,13 @@ def run() -> int:
         while not stop.is_set():
             wake.clear()
             cfg = config.load()
-            videos, now = library.list_videos(), time.time()
+            videos, now = library.list_active(cfg), time.time()
             if cycling.is_due(cfg, now, len(videos)):
                 cfg = config.update(wallpaper=cycling.next_video(videos, cfg.get("wallpaper")),
                                     last_change=now)
+            elif config.active_playlist(cfg) and videos and cfg.get("wallpaper") not in videos:
+                # The active playlist was changed (or the file left it): start with its first file.
+                cfg = config.update(wallpaper=videos[0], last_change=now)
 
             name = cfg.get("wallpaper")
             if not name or not (paths.VIDEO_DIR / name).is_file():

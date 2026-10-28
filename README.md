@@ -12,6 +12,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/toczekmj/niri-live-wallp
 ```
 
 It shows what it's going to do and asks before changing anything:
+
 - **Arch-based distros** (Arch, EndeavourOS, CachyOS, Manjaro, …): installs a regular pacman package, including
   `mpvpaper` from the AUR.
 - **Other distros:** installs the app in its own folder in your home (no sudo), then lists any programs you
@@ -37,6 +38,7 @@ it like any other window, so it covers your apps. Here the video is drawn by
   - [3. Only one wallpaper program](#3-only-one-wallpaper-program)
   - [4. Install and run](#4-install-and-run)
 - [Usage](#usage)
+  - [Playlists (p)](#playlists-p)
   - [Per-file, per-screen settings (e)](#per-file-per-screen-settings-e)
   - [Fit: when the picture and the screen differ in shape](#fit-when-the-picture-and-the-screen-differ-in-shape)
 - [How it works](#how-it-works)
@@ -49,7 +51,7 @@ it like any other window, so it covers your apps. Here the video is drawn by
 
 ## Features
 
-```
+```text
  Niri Live Wallpaper
  ─────────────────────────────────────────────────────────────────────────────────
  Setup
@@ -59,13 +61,14 @@ layout { background-color "transparent"; }
  ✓ no other wallpaper program is drawing
  ✓ session: systemd and niri session ready for the background service
  ─────────────────────────────────────────────────────────────────────────────────
- Videos  (~/.local/share/niri-live-wallpaper/videos)
+ Wallpapers  (~/.local/share/niri-live-wallpaper/videos)
   ● ocean.mp4      3840×2160 · 60 fps → 30 fps · per-screen
   ○ forest.webm    1920×1080 · 24 fps
 
  Actions
   › Import videos & images (fuzzy finder, Tab marks several)
   › Open video folder in file manager
+  › Playlists: [all wallpapers]  (create, rename, delete, add & remove files)
   › Stop live wallpaper
   › Cycle wallpapers: [every 1h 30m]
   › Start at login: [on]
@@ -76,11 +79,13 @@ layout { background-color "transparent"; }
  wallpaper: playing   autostart: on   cycle: every 1h 30m, next in 52m
 ```
 
-
 - **Wallpaper library:** import videos and still images (png, jpg, webp, …) with a fuzzy finder (`fzf`), one or many at once, or drop files into the app's folder. Pick one
   with `space` and it becomes your wallpaper.
 - **Start at login:** asked the first time you pick a wallpaper, and toggleable any time.
-- **Cycling:** switch to the next video every hour, day, week, or a custom `hh:mm` interval.
+- **Playlists:** make named sets of wallpapers (create, rename, delete, add and remove files) and play just one of
+  them. The same file can have different settings, e.g. a different fit, in each playlist.
+- **Cycling:** switch to the next video every hour, day, week, or a custom `hh:mm` interval; each playlist has its
+  own interval.
 - **Per-screen performance tuning:** videos bigger than a screen get a downscaled copy made for that screen, so a
   4K video isn't decoded for a 1080p panel. Frame rate (60/30/24/12/custom/original) and resolution (100/75/50/33%/custom)
   can be set per video and per screen. Videos faster than 30 fps trigger a question on import.
@@ -231,9 +236,11 @@ Import a video (`i`), select it with `space`, and answer the "start at login?" q
 | `↑↓` / `j k`, `g` / `G` | move, jump to top/bottom |
 | `space` / `enter` | on a video: set it as the wallpaper; on an action: run it |
 | `i` | import videos: fuzzy-find videos under your home folder and they're **copied** into the app's video folder. Mark several with `Tab` (`Ctrl-A` marks everything currently shown, e.g. after typing a folder name), or just press `Enter` for one. With several, the frame-rate questions come first, then all copies are encoded; Esc during encoding skips the rest |
+| `p` | open the playlists popup (below); also the "Playlists" menu entry |
+| `+` | add the selected wallpaper to one or more playlists, with its current settings |
 | `o` | open the app's video folder in your file manager (files you drop there appear within a second) |
 | `e` / `f` | edit the selected video's or image's frame rate, resolution & fit, for all screens or per screen (images: fit only) |
-| `d` / `Delete` | delete the selected video (asks first; stops the wallpaper if it's the current one) |
+| `d` / `Delete` | delete the selected video (asks first; stops the wallpaper if it's the current one). **In a playlist** it only removes the file from the playlist; the file stays in the library |
 | `s` | stop the wallpaper (start at login stays as it is) |
 | `a` | toggle start at login |
 | `c` | copy the two niri config lines (setup step 2) to the clipboard |
@@ -245,16 +252,58 @@ Menu-only options:
   2:00; from 1 minute to 720 hours). The next video in the list takes over once the interval since the last change
   has passed. "Every day" means 24 h after the last change, not at midnight. A change that came due while the
   laptop was off or asleep happens shortly after it wakes. Picking a video by hand restarts the countdown. Needs
-  at least 2 videos.
+  at least 2 videos. **It belongs to what is shown:** with a playlist selected the entry reads "Cycle the playlist
+  Chill" and sets that playlist's interval; with "All wallpapers" it sets the one for all files. Switching to a
+  playlist starts its countdown from that moment, and a new playlist starts with cycling off.
 - **Ask to lower frame rate on import (>30 fps):** on by default. Importing a video faster than 30 fps (or
   selecting a dropped-in one for the first time) asks whether to convert it to 60/30/24/12/custom fps or keep the
   original.
 - **Ask for per-screen frame rate, resolution & fit on import:** off by default. When on, the settings editor
   (below) opens on import instead of the questions above.
 
+### Playlists (`p`)
+
+A playlist is a named set of files from your library. With **no playlist** the app behaves as it always did: the
+list shows every file and cycling goes through all of them. Choose a playlist and the list shows only its files,
+and only those play and cycle. The popup:
+
+```text
+╭─────────────────── Playlists ───────────────────╮
+│ Playlist >                                      │
+│ ✚  New playlist…                                │
+│ ○  All wallpapers (no playlist)                 │
+│ ●  Chill   · 5 files                            │
+│ ○  Work    · 2 files                            │
+╰─────────────────────────────────────────────────╯
+```
+
+| Key in the popup | Action |
+|---|---|
+| `Enter` | switch to the highlighted playlist (or to "All wallpapers"); on "New playlist…" it asks for a name, then lets you pick its first files |
+| `Ctrl-R` | rename the highlighted playlist |
+| `Ctrl-D` | delete it (asks first; the files stay in the library) |
+| `Ctrl-A` | add files: pick from the library with `Tab` (`Ctrl-A` marks all shown) |
+| `Ctrl-X` | remove files from it (they stay in the library) |
+| `Esc` | close |
+
+- The popup is a fuzzy finder (`fzf`), so you can type to find a playlist or a file. It takes over the terminal
+  while open, like the import picker; the main screen comes back when it closes.
+- Switching to a playlist whose files don't include the current wallpaper starts with its first file. Going
+  back to "All wallpapers" keeps the current one. Both are applied straight away.
+- `+` on the main screen adds the highlighted wallpaper to playlists without opening the popup. Importing (`i`)
+  while a playlist is shown adds the new files to it as well.
+- **Each playlist keeps its own settings for a file.** Adding a file copies the settings it has at that moment
+  (fit, crop edge, frame rate, resolution, per-screen choices); after that they are independent. `photo1.png` can
+  fill-and-crop in one playlist, have black bars in another, and keep its own blurred bars in the library. While
+  a playlist is shown, `e`, the fit previews and the questions asked when you pick a wallpaper all work on that
+  playlist's copy only. Editing the settings in "All wallpapers" doesn't change the playlists either.
+- Files are played in alphabetical order, as without a playlist.
+- **Each playlist has its own cycle time** (the "Cycle wallpapers" menu entry, below). "All wallpapers" keeps the
+  one you had before; renaming a playlist keeps its cycle, deleting it drops it.
+
 ### Per-file, per-screen settings (`e`)
 
-```
+```text
 Screen           Frame rate              Resolution                  Fit
 All screens      30 fps                  50%                         Blurred bars
 HDMI-A-1         = 30 fps                native (3440×1440)          = Blurred bars
@@ -266,7 +315,7 @@ eDP-1            24 fps                  = 50% (960×600)             Fill · le
   scales it up to fill the screen. Lower values decode less and save power; 50% looks soft up close but fine
   behind windows. (Videos only; ignored by the "original size" fit.)
 - **Fit:** see below. Images only have this column.
-- A value starting with `= ` is inherited from **All screens**. Choose "Same as all screens" to go back to that.
+- A value starting with "= " is inherited from **All screens**. Choose "Same as all screens" to go back to that.
 - **Changes are shown live.** Each choice is applied to the running wallpaper as soon as you make it (if it's your
   current one, only the screens whose settings changed get a new player; the others keep playing). For **Fit**
   you don't even have to choose: moving the highlight (`j`/`k`) through the fit menu, or through the "which part
@@ -301,7 +350,7 @@ With **Fill**, a second question asks which part to keep: centre, left, right, t
 
 ## How it works
 
-```
+```text
  nlw (TUI)                            systemd --user                         niri
  ───────────                          ──────────────                         ────
  saves choices to config.json ──►  niri-live-wallpaper.service
@@ -372,7 +421,7 @@ start at login, so after moving the app, do one of those.
   "version": 2,                        // file format version; older files are upgraded on load
   "wallpaper": "ocean.mp4",            // current video (file name in the videos folder)
   "last_change": 1792958392.7,         // when the wallpaper last changed (Unix time), for cycling
-  "cycle": { "mode": "custom",         // off | hourly | daily | weekly | custom
+  "cycle": { "mode": "custom",         // cycle of all files: off | hourly | daily | weekly | custom
              "minutes": 90 },          // custom interval (kept when you switch to a preset)
   "autostart_prompted": true,          // the "start at login?" question was asked
   "ask_fps": true,                     // ask to lower frame rate on import
@@ -389,6 +438,12 @@ start at login, so after moving the app, do one of those.
       }
     },
     "sunset.png": { "fit": "fit" }     // images only have fit and align
+  },
+  "playlist": "Chill",                 // the playlist that is shown and played; missing = all files
+  "playlists": {                       // each file has its own copy of the settings in each playlist
+    "Chill": { "items": { "ocean.mp4": { "fps": 24 }, "sunset.png": { "fit": "blur" } },
+               "cycle": { "mode": "hourly", "minutes": 90 } },   // this playlist's cycle; missing = off
+    "Work":  { "items": { "sunset.png": { "fit": "fit" }, "forest.webm": null } }   // null = not asked yet
   }
 }
 ```
@@ -410,7 +465,7 @@ start at login, so after moving the app, do one of those.
   `org.freedesktop.FileManager1`, so the app fell back to `xdg-open`, which uses your `inode/directory` default.
   Fix that default with `xdg-mime default thunar.desktop inode/directory` (use your file manager's `.desktop`
   name).
-- **Cycling does nothing:** it needs at least 2 videos.
+- **Cycling does nothing:** it needs at least 2 videos (in the playlist that is shown, if you use one).
 
 ## Development
 
@@ -418,7 +473,7 @@ The code is a small Python package with no dependencies outside the standard lib
 [PRACTICES.md](PRACTICES.md) explains how it's organised and why. [CHANGELOG.md](CHANGELOG.md) lists changes per
 version.
 
-```
+```text
 nlw.py                       launcher: run from the checkout without installing
 install.sh                   the one-line installer (Arch package or Python environment)
 pyproject.toml               metadata, Python version, the `nlw` entry point
@@ -429,7 +484,8 @@ niri_live_wallpaper/
   config.py                  config.json: schema, defaults, migrations
   cycling.py                 cycle schedule maths (pure)
   fit.py                     how a picture fits a screen: modes, mpv options, blur filter (pure)
-  library.py                 the wallpaper folder: list, import, delete
+  library.py                 the wallpaper folder: list, import, delete; what is shown and played
+  playlists.py               playlists: names, add / remove files, rename, delete (pure: returns config changes)
   media.py                   ffprobe / ffmpeg: video info, theme frame, encoding
   variants.py                per-screen copies: what to encode (pure), encoding, pruning
   niri.py                    screens, background surfaces, niri config checks
@@ -442,8 +498,9 @@ niri_live_wallpaper/
     app.py                   main screen and actions
     settings_editor.py       frame-rate question and per-screen editor
     dialogs.py               yes/no, choose, text input
+    playlist_manager.py      the playlists popup (fzf menus, name prompts)
     formatting.py, style.py  texts, colours, keys
-tests/                       unit tests for config, cycling, variants, niri, checks, import
+tests/                       unit tests for config, cycling, variants, fit, playlists, the settings editor, niri, checks, import
 packaging/aur/               AUR recipe (PKGBUILD) and the release checklist
 ```
 

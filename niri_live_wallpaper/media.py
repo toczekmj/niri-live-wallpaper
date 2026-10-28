@@ -239,7 +239,7 @@ def encode(
             log.error("ffmpeg is not installed")
             return EncodeResult.FAILED
         cancelled = False
-        for line in process.stdout:
+        for line in process.stdout or ():  # (stdout=PIPE: never None)
             if not (line.startswith("out_time_us=") and duration):
                 continue
             try:

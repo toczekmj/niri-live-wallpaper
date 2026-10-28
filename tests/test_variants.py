@@ -4,6 +4,8 @@ from pathlib import Path
 from niri_live_wallpaper.media import VideoInfo, is_image, parse_rate
 from niri_live_wallpaper.variants import ScreenJob, Variant, plan, scaled_size
 
+from .helpers import planned
+
 UHD_60 = VideoInfo(width=3840, height=2160, fps=59.94, duration=60, has_audio=True)
 HD_30 = VideoInfo(width=1280, height=720, fps=30, duration=3, has_audio=False)
 
@@ -29,7 +31,7 @@ class PlanTest(unittest.TestCase):
         )
 
     def test_fps_cap_and_downscale(self):
-        variant = plan(UHD_60, job(1920, 1200, fps=30))
+        variant = planned(UHD_60, job(1920, 1200, fps=30))
         self.assertEqual(variant.filename, "1920x1200@30.mp4")
         self.assertTrue(variant.video_filter.startswith("fps=30,scale=1920:1200"))
 
@@ -50,7 +52,7 @@ class PlanTest(unittest.TestCase):
 
     def test_resolution_percentage(self):
         self.assertEqual(
-            plan(UHD_60, job(1920, 1200, scale=50)).filename, "960x600@src.mp4"
+            planned(UHD_60, job(1920, 1200, scale=50)).filename, "960x600@src.mp4"
         )
 
     def test_scaled_size_is_even(self):

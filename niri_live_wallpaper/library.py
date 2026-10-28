@@ -1,4 +1,5 @@
-"""The wallpaper library (videos and still images): the files in paths.VIDEO_DIR."""
+"""The wallpaper library (videos and still images): the files in paths.VIDEO_DIR, and the part of
+it that is shown and played (all of it, or the active playlist)."""
 
 from __future__ import annotations
 
@@ -23,6 +24,17 @@ def list_videos() -> list[str]:
     )
 
 
+def list_active(cfg: config.Config) -> list[str]:
+    """The files that are shown in the TUI and played: those of the active playlist that exist in
+    the library, or all of the library when no playlist is active."""
+    available = list_videos()
+    playlist = config.active_playlist(cfg)
+    if not playlist:
+        return available
+    members = set(config.playlist_items(cfg, playlist))
+    return [name for name in available if name in members]
+
+
 def import_video(src: Path) -> tuple[str, bool]:
     """Copy src into the library. Returns (file name, already_present).
 
@@ -42,8 +54,9 @@ def import_video(src: Path) -> tuple[str, bool]:
 
 
 def delete_video(name: str) -> None:
-    """Remove a video and everything derived from it: copies, theme frame, its settings."""
+    """Remove a video and everything derived from it: copies, theme frame, its settings, and its
+    place in every playlist."""
     (paths.VIDEO_DIR / name).unlink(missing_ok=True)
     (paths.FRAME_DIR / f"{name}.jpg").unlink(missing_ok=True)
     variants.remove_all(name)
-    config.forget_video(name)
+    config.purge_video(name)

@@ -12,12 +12,11 @@ import curses
 from collections.abc import Callable
 from typing import Any
 
-from .. import fit
+from .. import config, fit
 from ..media import VideoInfo
 from ..niri import Output
 from . import style
 from .dialogs import Dialogs, put_clipped
-from .. import config
 from .formatting import fps_text, scale_text
 
 FPS_CHOICES = (60, 30, 24, 12)

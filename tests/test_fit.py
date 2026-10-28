@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any, ClassVar
 from unittest import mock
 
 from niri_live_wallpaper import config, fit, paths, variants
@@ -8,6 +9,8 @@ from niri_live_wallpaper.media import VideoInfo
 from niri_live_wallpaper.service import MPV_OPTIONS, play_for
 from niri_live_wallpaper.tui.formatting import describe_video
 from niri_live_wallpaper.variants import ScreenJob, plan
+
+from .helpers import planned
 
 ULTRAWIDE = VideoInfo(width=3440, height=1440, fps=0, duration=0, has_audio=False, is_image=True)
 SQUARE_ISH = VideoInfo(width=1920, height=1200, fps=0, duration=0, has_audio=False, is_image=True)
@@ -46,7 +49,7 @@ class MpvOptionsTest(unittest.TestCase):
 
 class BlurVariantTest(unittest.TestCase):
     def test_blur_makes_a_copy_per_screen_size(self):
-        variant = plan(ULTRAWIDE, job("blur"))
+        variant = planned(ULTRAWIDE, job("blur"))
         self.assertEqual(variant.filename, "1920x1200@src-blur.jpg")
         self.assertEqual(variant.video_filter, fit.blur_filter(1920, 1200))
 
@@ -64,42 +67,42 @@ VIDEO_16_9 = VideoInfo(width=3840, height=2160, fps=30, duration=10, has_audio=F
 
 class VideoFitPlanTest(unittest.TestCase):
     def test_fill_is_the_old_behaviour(self):
-        variant = plan(VIDEO_16_9, job("fill"))
+        variant = planned(VIDEO_16_9, job("fill"))
         self.assertEqual(variant.filename, "1920x1200@src.mp4")
         self.assertEqual(variant.video_filter,
                          "scale=1920:1200:force_original_aspect_ratio=increase,crop=1920:1200")
 
     def test_fill_crops_from_the_chosen_edge(self):
-        variant = plan(VIDEO_16_9, job("fill", "left"))
+        variant = planned(VIDEO_16_9, job("fill", "left"))
         self.assertEqual(variant.filename, "1920x1200@src-left.mp4")
         self.assertTrue(variant.video_filter.endswith("crop=1920:1200:(iw-ow)*0:(ih-oh)*0.5"))
-        self.assertTrue(plan(VIDEO_16_9, job("fill", "bottom")).video_filter.endswith("(iw-ow)*0.5:(ih-oh)*1"))
+        self.assertTrue(planned(VIDEO_16_9, job("fill", "bottom")).video_filter.endswith("(iw-ow)*0.5:(ih-oh)*1"))
 
     def test_fit_shrinks_inside_the_screen(self):
-        variant = plan(VIDEO_16_9, job("fit"))
+        variant = planned(VIDEO_16_9, job("fit"))
         self.assertEqual((variant.filename, variant.video_filter), ("1920x1080@src-fit.mp4", "scale=1920:1080"))
 
     def test_fit_without_shrinking_needs_no_copy(self):
         self.assertIsNone(plan(VIDEO_16_9, job("fit", width=3840, height=2400)))
 
     def test_stretch_scales_to_the_screen_shape(self):
-        variant = plan(VIDEO_16_9, job("stretch"))
+        variant = planned(VIDEO_16_9, job("stretch"))
         self.assertEqual((variant.filename, variant.video_filter), ("1920x1200@src-stretch.mp4", "scale=1920:1200"))
 
     def test_blur_is_always_a_copy_at_screen_size(self):
-        variant = plan(VIDEO_16_9, job("blur", width=3840, height=2400))
+        variant = planned(VIDEO_16_9, job("blur", width=3840, height=2400))
         self.assertEqual(variant.filename, "3840x2400@src-blur.mp4")
         self.assertTrue(variant.graph)
         self.assertEqual(variant.video_filter, fit.blur_filter(3840, 2400))
 
     def test_blur_with_fps_cap_prefixes_the_graph(self):
-        variant = plan(ULTRAWIDE_VIDEO, ScreenJob("OUT", 1920, 1200, 30, 50, "blur", "center"))
+        variant = planned(ULTRAWIDE_VIDEO, ScreenJob("OUT", 1920, 1200, 30, 50, "blur", "center"))
         self.assertEqual(variant.filename, "960x600@30-blur.mp4")
         self.assertTrue(variant.video_filter.startswith("fps=30,split["))
 
     def test_center_only_caps_the_frame_rate(self):
         self.assertIsNone(plan(VIDEO_16_9, job("center")))
-        variant = plan(VIDEO_16_9, ScreenJob("OUT", 1920, 1200, 24, 50, "center", "center"))
+        variant = planned(VIDEO_16_9, ScreenJob("OUT", 1920, 1200, 24, 50, "center", "center"))
         self.assertEqual((variant.filename, variant.video_filter), ("3840x2160@24.mp4", "fps=24"))
 
     def test_same_shape_makes_every_fit_the_plain_fill(self):
@@ -108,14 +111,14 @@ class VideoFitPlanTest(unittest.TestCase):
                              plan(VIDEO_16_9, job("fill", width=1920, height=1080)))
 
     def test_different_fits_never_share_a_file(self):
-        names = {plan(VIDEO_16_9, job(m, a)).filename
+        names = {planned(VIDEO_16_9, job(m, a)).filename
                  for m, a in (("fill", "center"), ("fill", "left"), ("fit", "center"),
                               ("blur", "center"), ("stretch", "center"))}
         self.assertEqual(len(names), 5)
 
 
 class FitSettingsTest(unittest.TestCase):
-    CFG = {"videos": {
+    CFG: ClassVar[dict[str, Any]] = {"videos": {
         "a.png": {"fit": "fill", "align": "right"},
         "b.png": {"fit": "blur", "screens": {"eDP-1": {"fit": "fill"}, "DP-1": {"fit": "fit"}}},
         "c.png": {"align": "left", "screens": {"eDP-1": {"fit": "fill"}}},

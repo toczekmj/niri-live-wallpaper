@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 
 from niri_live_wallpaper.media import VideoInfo
 from niri_live_wallpaper.niri import Output
@@ -31,14 +32,16 @@ class ScriptedDialogs:
         if isinstance(answer, tuple):
             highlights, answer = answer
             for index in highlights:
-                on_highlight(index)
+                if on_highlight:
+                    on_highlight(index)
         return answer
 
 
 def editor(*answers, keys=()):
     dialogs = ScriptedDialogs(*answers, keys=keys)
-    ed = SettingsEditor(None, dialogs, redraw=lambda: None)
-    ed._draw = lambda *args: None  # no terminal here
+    # No terminal here: no screen, scripted dialogs, and nothing to draw.
+    ed = SettingsEditor(cast(Any, None), cast(Any, dialogs), redraw=lambda: None)
+    ed._draw = lambda *args: None  # pyright: ignore[reportAttributeAccessIssue]
     return ed, dialogs
 
 
@@ -67,7 +70,7 @@ class PickFitTest(unittest.TestCase):
         ed, dialogs = editor(0)
         result = ed.pick_fit("p.png", PHOTO, [LAPTOP], INHERIT, inherit_label="Blurred bars")
         self.assertIs(result, INHERIT)
-        title, options, default = dialogs.shown[0]
+        _title, options, default = dialogs.shown[0]
         self.assertEqual((options[0], default), ("Same as all screens (Blurred bars)", 0))
 
 
@@ -133,7 +136,7 @@ class LivePreviewTest(unittest.TestCase):
         self.assertEqual((result, previews), ({}, []))
 
     def test_choosing_what_is_already_set_is_not_a_change(self):
-        result, previews = self.run_editor([ENTER, ESC], 1, entry={"fit": "fit"})
+        _result, previews = self.run_editor([ENTER, ESC], 1, entry={"fit": "fit"})
         self.assertEqual(previews, [])
 
     def test_defaults_are_tidied_in_previews(self):

@@ -33,7 +33,9 @@ class VersionTest(unittest.TestCase):
         self.assertEqual(parse_version("0.74.5 (c0a193e0)"), (0, 74, 5))
         self.assertEqual(parse_version("0.29\n"), (0, 29))
         self.assertIsNone(parse_version("fzf dev"))
-        self.assertLess(parse_version("0.29.0"), (0, 33))
+        version = parse_version("0.29.0")
+        self.assertIsNotNone(version)
+        self.assertLess(version or (), (0, 33))
 
 
 if __name__ == "__main__":

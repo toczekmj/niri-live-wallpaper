@@ -20,9 +20,9 @@ with the same target share one file.
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from . import config, fit, media, paths
 from .config import Config
@@ -50,9 +50,21 @@ class Variant:
 
 
 def jobs_for(cfg: Config, name: str, outputs: list[Output]) -> list[ScreenJob]:
-    return [ScreenJob(o.name, o.width, o.height, *config.screen_settings(cfg, name, o.name),
-                      *config.screen_fit(cfg, name, o.name))
+    """What each screen should show of `name`, with its settings in the active playlist (if any)."""
+    return jobs_for_entry(config.video_entry(cfg, name), outputs)
+
+
+def jobs_for_entry(entry: dict | None, outputs: list[Output]) -> list[ScreenJob]:
+    entry = entry or {}
+    return [ScreenJob(o.name, o.width, o.height, *config.screen_settings_of(entry, o.name),
+                      *config.screen_fit_of(entry, o.name))
             for o in outputs]
+
+
+def jobs_everywhere(cfg: Config, name: str, outputs: list[Output]) -> list[ScreenJob]:
+    """The jobs of `name` under all its settings: the library's own and those in every playlist
+    it is in. For prune(): a copy one playlist needs must not go because another doesn't."""
+    return [job for entry in config.entries_of(cfg, name) for job in jobs_for_entry(entry, outputs)]
 
 
 def scaled_size(width: int, height: int, scale: int) -> tuple[int, int]:
@@ -143,6 +155,8 @@ def ensure(name: str, jobs: list[ScreenJob],
     """
     src = paths.VIDEO_DIR / name
     info = media.probe(src)
+    if info is None:  # unreadable: nothing can be planned, the original plays
+        return EncodeResult.OK, []
     done: set[Path] = set()
     failed: list[str] = []
     for job in jobs:
@@ -152,7 +166,7 @@ def ensure(name: str, jobs: list[ScreenJob],
         path = variant_path(name, variant)
         if path.exists() or path in done:
             continue
-        report = lambda f, out=job.output, p=path: on_progress(out, p, f)  # noqa: E731
+        report = lambda f, out=job.output, p=path: on_progress(out, p, f)
         if info.is_image:
             if report(0.0):
                 return EncodeResult.CANCELLED, failed
@@ -170,7 +184,8 @@ def ensure(name: str, jobs: list[ScreenJob],
 
 
 def prune(name: str, jobs: list[ScreenJob]) -> None:
-    """Delete copies of `name` that none of `jobs` would play (e.g. after a settings change)."""
+    """Delete copies of `name` that none of `jobs` would play (e.g. after a settings change). Pass
+    jobs_everywhere() so other playlists' copies stay."""
     info = media.probe(paths.VIDEO_DIR / name)
     keep = {variant_path(name, v) for v in (plan(info, job) for job in jobs) if v is not None}
     for file in (paths.OPTIMIZED_DIR / name).glob("*@*"):

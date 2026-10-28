@@ -5,4 +5,4 @@ Start reading at `__main__.py` (command line), then `tui/app.py` (the interactiv
 code is organised and why.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

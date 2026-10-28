@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from niri_live_wallpaper.desktop import parse_selection
+from niri_live_wallpaper.desktop import parse_menu_output, parse_selection
 from niri_live_wallpaper.tui.formatting import import_summary
 
 
@@ -12,6 +12,23 @@ class ParseSelectionTest(unittest.TestCase):
 
     def test_nothing_selected(self):
         self.assertEqual(parse_selection(""), [])
+
+
+class MenuOutputTest(unittest.TestCase):
+    def test_enter_with_expect_has_an_empty_first_line(self):
+        self.assertEqual(parse_menu_output("\nChill\t●  Chill   · 2 files\n", True), ("", ["Chill"]))
+
+    def test_an_expected_key_comes_first(self):
+        self.assertEqual(parse_menu_output("ctrl-r\nChill\t●  Chill\n", True), ("ctrl-r", ["Chill"]))
+
+    def test_without_expect_every_line_is_a_pick(self):
+        self.assertEqual(parse_menu_output("a.png\ta.png\nb.mp4\tb.mp4\n", False), ("", ["a.png", "b.mp4"]))
+
+    def test_names_with_spaces_and_accents_survive(self):
+        self.assertEqual(parse_menu_output("\nMój zestaw 2\t●  Mój zestaw 2\n", True), ("", ["Mój zestaw 2"]))
+
+    def test_nothing_picked(self):
+        self.assertEqual(parse_menu_output("", True), ("", []))
 
 
 class ImportSummaryTest(unittest.TestCase):

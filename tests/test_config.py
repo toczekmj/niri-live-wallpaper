@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any, ClassVar
 from unittest import mock
 
 from niri_live_wallpaper import config, paths
@@ -60,7 +61,7 @@ class ConfigFileTest(unittest.TestCase):
 
 
 class ScreenSettingsTest(unittest.TestCase):
-    cfg = {"videos": {"v.mp4": {
+    cfg: ClassVar[dict[str, Any]] = {"videos": {"v.mp4": {
         "fps": 30, "scale": 75,
         "screens": {"eDP-1": {"fps": 24}, "HDMI-A-1": {"scale": 100, "fps": None}},
     }}}
