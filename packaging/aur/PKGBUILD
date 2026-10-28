@@ -27,7 +27,7 @@ optdepends=(
   'nvidia-vaapi-driver: hardware video decoding on NVIDIA GPUs'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('c412f027abeee71d2bdb7193749b4906dc0e14880f7175919621631e0e940051')
+sha256sums=('90c291e4e99c6a1ccbc8e57c03370c0e198ea00e62d2486dfcfd75ef5d06f02a')
 
 build() {
   cd "$pkgname-$pkgver"
